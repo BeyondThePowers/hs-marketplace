@@ -1,0 +1,28 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = 'HuntSeeker Marketplace',
+  description = 'A public marketplace of outfitter hunt packages.',
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main class="page-shell">
+      <slot />
+    </main>
+  </body>
+</html>

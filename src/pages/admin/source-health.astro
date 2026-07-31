@@ -1,0 +1,179 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { secretHash } from '../../lib/content-hash';
+import { verifySecret } from '../../lib/source-security';
+import { createServiceClient } from '../../lib/supabase-server';
+
+export const prerender = false;
+
+function credentials() {
+  const authorization = Astro.request.headers.get('authorization');
+  if (!authorization?.startsWith('Basic ')) return null;
+  try {
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    if (separator < 0) return null;
+    return { user: decoded.slice(0, separator), password: decoded.slice(separator + 1) };
+  } catch {
+    return null;
+  }
+}
+
+const expectedUser = import.meta.env.MARKETPLACE_DIAGNOSTICS_USER;
+const expectedPassword = import.meta.env.MARKETPLACE_DIAGNOSTICS_PASSWORD;
+const supplied = credentials();
+// Compare both values with the same constant-time helper without ever exposing
+// them to page data or logs.
+const validCredentials = Boolean(
+  expectedUser &&
+  expectedPassword &&
+  supplied &&
+  verifySecret(supplied.user, secretHash(expectedUser)) &&
+  verifySecret(supplied.password, secretHash(expectedPassword))
+);
+
+if (!validCredentials) {
+  Astro.response.status = 401;
+  Astro.response.headers.set('WWW-Authenticate', 'Basic realm="Marketplace diagnostics"');
+  Astro.response.headers.set('Cache-Control', 'no-store');
+}
+
+type SourceHealth = {
+  sourceId: string;
+  name: string;
+  enabled: boolean;
+  feedEnabled: boolean;
+  credentialConfigured: boolean;
+  credentialHint: string | null;
+  feedUrl: string;
+  lastStatus: string | null;
+  lastSyncAt: string | null;
+  lastSuccessAt: string | null;
+  durationMs: number | null;
+  failures: number;
+  hunts: number;
+  ready: number;
+  published: number;
+  orphaned: number;
+  lastError: string | null;
+};
+
+let rows: SourceHealth[] = [];
+let loadError: string | null = null;
+
+if (validCredentials) {
+  Astro.response.headers.set('Cache-Control', 'no-store');
+  try {
+    const supabase = createServiceClient();
+    const [sourcesResult, huntsResult] = await Promise.all([
+      supabase.from('marketplace_sources').select('*').order('name'),
+      supabase
+        .from('marketplace_hunts')
+        .select('source_id, content_status, published, orphaned_at'),
+    ]);
+    if (sourcesResult.error) throw sourcesResult.error;
+    if (huntsResult.error) throw huntsResult.error;
+
+    rows = (sourcesResult.data ?? []).map((source) => {
+      const hunts = (huntsResult.data ?? []).filter((hunt) => hunt.source_id === source.source_id);
+      return {
+        sourceId: source.source_id,
+        name: source.name,
+        enabled: source.enabled,
+        feedEnabled: source.feed_enabled,
+        credentialConfigured: Boolean(source.webhook_secret_hash),
+        credentialHint: source.webhook_secret_hint,
+        feedUrl: source.content_feed_url,
+        lastStatus: source.last_sync_status,
+        lastSyncAt: source.last_sync_at,
+        lastSuccessAt: source.last_successful_sync_at,
+        durationMs: source.last_sync_duration_ms,
+        failures: source.consecutive_failures,
+        hunts: hunts.length,
+        ready: hunts.filter((hunt) => hunt.content_status === 'ready').length,
+        published: hunts.filter((hunt) => hunt.published).length,
+        orphaned: hunts.filter((hunt) => hunt.orphaned_at).length,
+        lastError: source.last_sync_error,
+      };
+    });
+  } catch (error) {
+    loadError = error instanceof Error ? error.message : 'Unable to load source health';
+  }
+}
+
+const formatDate = (value: string | null) =>
+  value ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Never';
+---
+
+{validCredentials ? (
+  <BaseLayout title="Marketplace source health" description="Internal marketplace synchronization diagnostics.">
+    <main class="container diagnostics">
+      <header>
+        <p class="eyebrow">Marketplace operations</p>
+        <h1>Source health</h1>
+        <p>Registered marketing feeds, webhook readiness, and reconciliation state.</p>
+      </header>
+
+      {loadError ? <div class="error" role="alert">{loadError}</div> : null}
+
+      <div class="source-grid">
+        {rows.map((source) => (
+          <article class="source-card">
+            <div class="source-heading">
+              <div>
+                <h2>{source.name}</h2>
+                <code>{source.sourceId}</code>
+              </div>
+              <span class:list={['status', source.lastStatus === 'success' ? 'healthy' : 'attention']}>
+                {source.lastStatus ?? 'Never synced'}
+              </span>
+            </div>
+
+            <dl>
+              <div><dt>Registry</dt><dd>{source.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+              <div><dt>Source feed</dt><dd>{source.feedEnabled ? 'Enabled' : 'Disabled'}</dd></div>
+              <div><dt>Webhook</dt><dd>{source.credentialConfigured ? `Configured · ${source.credentialHint ?? 'no hint'}` : 'Missing credential'}</dd></div>
+              <div><dt>Last attempt</dt><dd>{formatDate(source.lastSyncAt)}</dd></div>
+              <div><dt>Last success</dt><dd>{formatDate(source.lastSuccessAt)}</dd></div>
+              <div><dt>Duration</dt><dd>{source.durationMs === null ? 'Unknown' : `${source.durationMs} ms`}</dd></div>
+              <div><dt>Hunts</dt><dd>{source.hunts}</dd></div>
+              <div><dt>Ready</dt><dd>{source.ready}</dd></div>
+              <div><dt>Published</dt><dd>{source.published}</dd></div>
+              <div><dt>Orphaned</dt><dd>{source.orphaned}</dd></div>
+              <div><dt>Consecutive failures</dt><dd>{source.failures}</dd></div>
+            </dl>
+
+            <a href={source.feedUrl} rel="noreferrer">Open registered feed</a>
+            {source.lastError ? <p class="error">{source.lastError}</p> : null}
+          </article>
+        ))}
+      </div>
+    </main>
+  </BaseLayout>
+) : (
+  <main class="unauthorized">
+    <h1>Authentication required</h1>
+    <p>Marketplace diagnostics are unavailable without configured operator credentials.</p>
+  </main>
+)}
+
+<style>
+  .diagnostics { padding: 72px 0; }
+  header { max-width: 760px; margin-bottom: 36px; }
+  .eyebrow { color: var(--accent); font-size: .78rem; font-weight: 700; text-transform: uppercase; }
+  h1 { margin: 8px 0 12px; font-size: clamp(2.4rem, 6vw, 4.5rem); }
+  .source-grid { display: grid; gap: 20px; }
+  .source-card { padding: 24px; border: 1px solid color-mix(in srgb, currentColor 15%, transparent); border-radius: 14px; }
+  .source-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+  h2 { margin: 0 0 6px; }
+  code { color: var(--muted); font-size: .78rem; }
+  .status { padding: 6px 10px; border-radius: 999px; font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+  .healthy { background: #dff3e4; color: #175b2c; }
+  .attention { background: #f7e5c5; color: #6f4300; }
+  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 16px; margin: 24px 0; }
+  dl div { display: grid; gap: 4px; }
+  dt { color: var(--muted); font-size: .75rem; text-transform: uppercase; }
+  dd { margin: 0; font-weight: 600; }
+  .error { color: #9f2424; }
+  .unauthorized { max-width: 620px; margin: 20vh auto; padding: 24px; }
+</style>

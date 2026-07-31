@@ -1,0 +1,28 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/sync/source"
+  to = "/.netlify/functions/sync-source"
+  status = 200
+
+[functions."scheduled-sync"]
+  schedule = "@hourly"
+
+[dev]
+  command = "npm run dev"
+  port = 8889
+  targetPort = 4322
+  autoLaunch = false
+
+# Environment variables are configured in Netlify.
+# PUBLIC_SITE_URL
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+# SUPABASE_SERVICE_ROLE_KEY
+# ALLOW_INSECURE_SOURCE_URLS (local development only)
