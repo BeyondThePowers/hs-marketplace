@@ -18,10 +18,19 @@ const tripTypes = [...new Set(allHunts.map((hunt) => hunt.trip_type).filter(Bool
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const records = (value: unknown): Array<Record<string, unknown>> => Array.isArray(value) ? value.filter((item) => record(item)).map((item) => item as Record<string, unknown>) : [];
 const humanize = (value: unknown) => String(value ?? '').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
-const huntMethods = (hunt: (typeof allHunts)[number]) => records(record(hunt.classification)?.methods)
+const taxonomyNames = (value: unknown) => records(value)
   .map((method) => String(method.name ?? method.key ?? ''))
   .filter(Boolean);
-const methods = [...new Set(allHunts.flatMap(huntMethods))].sort();
+const huntEquipment = (hunt: (typeof allHunts)[number]) => taxonomyNames(record(hunt.classification)?.equipment);
+const huntTechniques = (hunt: (typeof allHunts)[number]) => taxonomyNames(record(hunt.classification)?.techniques);
+const huntTerrain = (hunt: (typeof allHunts)[number]) => Array.isArray(record(hunt.territory)?.terrain)
+  ? (record(hunt.territory)?.terrain as unknown[]).map(String).filter(Boolean)
+  : [];
+const huntAccess = (hunt: (typeof allHunts)[number]) => taxonomyNames(record(hunt.territory)?.accessMethods);
+const equipmentOptions = [...new Set(allHunts.flatMap(huntEquipment))].sort();
+const techniqueOptions = [...new Set(allHunts.flatMap(huntTechniques))].sort();
+const terrainOptions = [...new Set(allHunts.flatMap(huntTerrain))].sort();
+const accessOptions = [...new Set(allHunts.flatMap(huntAccess))].sort();
 const destinationGroups = countries.map((country) => ({
   country,
   regions: [...new Set(allHunts.filter((hunt) => hunt.country === country).map((hunt) => hunt.region).filter(Boolean))].sort(),
@@ -57,7 +66,7 @@ const featuredImage = imageUrl(allHunts[0]?.id ?? null);
 const searchData = allHunts.map((hunt) => ({
   id: hunt.listing_id,
   sourceId: hunt.source_id,
-  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? []), ...huntMethods(hunt)]
+  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? []), ...huntEquipment(hunt), ...huntTechniques(hunt), ...huntTerrain(hunt), ...huntAccess(hunt)]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase(),
@@ -65,7 +74,10 @@ const searchData = allHunts.map((hunt) => ({
   region: hunt.region ?? '',
   species: [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])],
   tripType: hunt.trip_type ?? '',
-  methods: huntMethods(hunt),
+  equipment: huntEquipment(hunt),
+  techniques: huntTechniques(hunt),
+  terrain: huntTerrain(hunt),
+  access: huntAccess(hunt),
   price: hunt.starting_price,
   huntingDays: Number(record(hunt.duration_and_party ?? hunt.duration)?.huntingDays ?? 0),
 }));
@@ -182,21 +194,56 @@ const collectionSchema = {
               ))}
             </div>
           </details>
-          <details>
-            <summary>Hunting method</summary>
+          {equipmentOptions.length > 0 && <details open>
+            <summary>Equipment</summary>
+            <div class="filter-group facet-options">
+              {equipmentOptions.map((item) => (
+                <label class="check-option" data-facet-option>
+                  <input type="checkbox" name="equipment" value={item} data-facet="equipment" data-label={item} />
+                  <span>{item}</span>
+                  <small data-facet-count data-facet="equipment" data-value={item}>{allHunts.filter((hunt) => huntEquipment(hunt).includes(item)).length}</small>
+                </label>
+              ))}
+            </div>
+          </details>}
+          {techniqueOptions.length > 0 && <details>
+            <summary>Hunt style</summary>
             <div class="filter-group">
-              {methods.length > 7 && <label class="facet-search"><span>Find a method</span><input type="search" placeholder="Search methods" autocomplete="off" data-facet-search="method" /></label>}
-              <div class="facet-options" data-facet-list="method">
-                {methods.map((item) => (
+              {techniqueOptions.length > 7 && <label class="facet-search"><span>Find a hunt style</span><input type="search" placeholder="Search hunt styles" autocomplete="off" data-facet-search="technique" /></label>}
+              <div class="facet-options" data-facet-list="technique">
+                {techniqueOptions.map((item) => (
                   <label class="check-option" data-facet-option>
-                    <input type="checkbox" name="method" value={item} data-facet="method" data-label={item} />
+                    <input type="checkbox" name="technique" value={item} data-facet="technique" data-label={item} />
                     <span>{item}</span>
-                    <small data-facet-count data-facet="method" data-value={item}>{allHunts.filter((hunt) => huntMethods(hunt).includes(item)).length}</small>
+                    <small data-facet-count data-facet="technique" data-value={item}>{allHunts.filter((hunt) => huntTechniques(hunt).includes(item)).length}</small>
                   </label>
                 ))}
               </div>
             </div>
-          </details>
+          </details>}
+          {(terrainOptions.length > 0 || accessOptions.length > 0) && <details>
+            <summary>Terrain and access</summary>
+            <div class="filter-group">
+              {terrainOptions.length > 0 && <div><p class="facet-subheading">Terrain</p><div class="facet-options">
+                {terrainOptions.map((item) => (
+                  <label class="check-option" data-facet-option>
+                    <input type="checkbox" name="terrain" value={item} data-facet="terrain" data-label={item} />
+                    <span>{item}</span>
+                    <small data-facet-count data-facet="terrain" data-value={item}>{allHunts.filter((hunt) => huntTerrain(hunt).includes(item)).length}</small>
+                  </label>
+                ))}
+              </div></div>}
+              {accessOptions.length > 0 && <div><p class="facet-subheading">Access</p><div class="facet-options">
+                {accessOptions.map((item) => (
+                  <label class="check-option" data-facet-option>
+                    <input type="checkbox" name="access" value={item} data-facet="access" data-label={item} />
+                    <span>{item}</span>
+                    <small data-facet-count data-facet="access" data-value={item}>{allHunts.filter((hunt) => huntAccess(hunt).includes(item)).length}</small>
+                  </label>
+                ))}
+              </div></div>}
+            </div>
+          </details>}
           <details>
             <summary>Budget and trip length</summary>
             <div class="filter-group">
@@ -281,7 +328,10 @@ const collectionSchema = {
         species,
         speciesMode: species.length > 1 && (form.elements.namedItem('speciesMode') as HTMLInputElement).checked ? 'all' : 'any',
         tripTypes: checkedValues('tripType'),
-        methods: checkedValues('method'),
+        equipment: checkedValues('equipment'),
+        techniques: checkedValues('technique'),
+        terrain: checkedValues('terrain'),
+        access: checkedValues('access'),
         maxPrice: Number((form.elements.namedItem('maxPrice') as HTMLSelectElement).value || 0),
         minDays: Number((form.elements.namedItem('minDays') as HTMLSelectElement).value || 0),
       };
@@ -299,7 +349,10 @@ const collectionSchema = {
       setCheckboxes('region', state.regions);
       setCheckboxes('species', state.species);
       setCheckboxes('tripType', state.tripTypes);
-      setCheckboxes('method', state.methods);
+      setCheckboxes('equipment', state.equipment);
+      setCheckboxes('technique', state.techniques);
+      setCheckboxes('terrain', state.terrain);
+      setCheckboxes('access', state.access);
       (form.elements.namedItem('speciesMode') as HTMLInputElement).checked = state.speciesMode === 'all';
       (form.elements.namedItem('maxPrice') as HTMLSelectElement).value = state.maxPrice ? String(state.maxPrice) : '';
       (form.elements.namedItem('minDays') as HTMLSelectElement).value = state.minDays ? String(state.minDays) : '';
@@ -307,7 +360,8 @@ const collectionSchema = {
 
     const optionInputs = () => [...form.querySelectorAll<HTMLInputElement>('input[data-facet]')];
     const selectedOptionCount = (state: FacetState) =>
-      state.countries.length + state.regions.length + state.species.length + state.tripTypes.length + state.methods.length +
+      state.countries.length + state.regions.length + state.species.length + state.tripTypes.length + state.equipment.length +
+      state.techniques.length + state.terrain.length + state.access.length +
       Number(Boolean(state.q.trim())) + Number(Boolean(state.maxPrice)) + Number(Boolean(state.minDays));
 
     const updateSpeciesMode = (state: FacetState) => {
@@ -339,9 +393,9 @@ const collectionSchema = {
         chip.addEventListener('click', remove);
         activeFilters.append(chip);
       };
-      const controls: Array<{ name: keyof Pick<FacetState, 'countries' | 'regions' | 'species' | 'tripTypes' | 'methods'>; value: string; label: string }> = [];
+      const controls: Array<{ name: keyof Pick<FacetState, 'countries' | 'regions' | 'species' | 'tripTypes' | 'equipment' | 'techniques' | 'terrain' | 'access'>; value: string; label: string }> = [];
       for (const input of optionInputs().filter((item) => item.checked)) {
-        const names = { country: 'countries', region: 'regions', species: 'species', tripType: 'tripTypes', method: 'methods' } as const;
+        const names = { country: 'countries', region: 'regions', species: 'species', tripType: 'tripTypes', equipment: 'equipment', technique: 'techniques', terrain: 'terrain', access: 'access' } as const;
         controls.push({ name: names[input.name as keyof typeof names], value: input.value, label: input.dataset.label ?? input.value });
       }
       for (const control of controls) {
@@ -1020,6 +1074,15 @@ const collectionSchema = {
   .facet-options {
     display: grid;
     gap: 2px;
+  }
+
+  .facet-subheading {
+    margin: 0 0 5px;
+    color: var(--muted);
+    font-size: .66rem;
+    font-weight: 760;
+    letter-spacing: .07em;
+    text-transform: uppercase;
   }
 
   .check-option {

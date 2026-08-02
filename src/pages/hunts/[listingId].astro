@@ -80,7 +80,13 @@ const territorySize = record(territory?.size);
 const terms = record(hunt.terms);
 const optionalServices = records(hunt.optional_services);
 const classification = record(hunt.classification);
-const methodTaxonomy = records(classification?.methods).map((item) => String(item.name ?? item.key ?? '')).filter(Boolean);
+const taxonomyNames = (value: unknown) => records(value).map((item) => String(item.name ?? item.key ?? '')).filter(Boolean);
+const equipmentTaxonomy = taxonomyNames(classification?.equipment);
+const techniqueTaxonomy = taxonomyNames(classification?.techniques);
+const compatibilityMethods = taxonomyNames(classification?.methods);
+const displayedEquipment = equipmentTaxonomy.length > 0 ? equipmentTaxonomy : compatibilityMethods;
+const displayedTechniques = techniqueTaxonomy;
+const accessMethods = taxonomyNames(territory?.accessMethods);
 const durationLabel = duration
   ? [duration.huntingDays && `${duration.huntingDays} hunting days`, duration.nights !== undefined && `${duration.nights} nights`]
       .filter(Boolean)
@@ -225,7 +231,8 @@ const huntSchema = [{
               {duration && <div><span>Duration</span><strong>{durationLabel}</strong></div>}
               {season && <div><span>Season</span><strong>{seasonLabel}</strong></div>}
               <div><span>Trip type</span><strong>{tripTypeLabel}</strong></div>
-              {methodTaxonomy.length > 0 && <div><span>Hunting methods</span><strong>{methodTaxonomy.join(', ')}</strong></div>}
+              {displayedEquipment.length > 0 && <div><span>Equipment</span><strong>{displayedEquipment.join(', ')}</strong></div>}
+              {displayedTechniques.length > 0 && <div><span>Hunt style</span><strong>{displayedTechniques.join(', ')}</strong></div>}
               {methodsAndGuiding?.arrangement && <div><span>Guiding</span><strong>{humanize(methodsAndGuiding.arrangement)}</strong></div>}
             </div>
           </section>
@@ -235,7 +242,7 @@ const huntSchema = [{
               <p class="section-label">In the field</p>
               <h2>How the hunt is conducted</h2>
               <dl class="detail-grid">
-                {methodTaxonomy.length > 0 && <div><dt>Methods</dt><dd>{methodTaxonomy.join(', ')}</dd></div>}
+                {displayedTechniques.length > 0 && <div><dt>Techniques</dt><dd>{displayedTechniques.join(', ')}</dd></div>}
                 {methodsAndGuiding.guidingRatio && <div><dt>Guide arrangement</dt><dd>{humanize(methodsAndGuiding.arrangement)} at {String(methodsAndGuiding.guidingRatio)}</dd></div>}
                 {methodsAndGuiding.intensity && <div><dt>Hunt intensity</dt><dd>{humanize(methodsAndGuiding.intensity)}</dd></div>}
                 {methodsAndGuiding.physicalDifficulty && <div><dt>Physical difficulty</dt><dd>{humanize(methodsAndGuiding.physicalDifficulty)}</dd></div>}
@@ -376,6 +383,7 @@ const huntSchema = [{
                 {territory.ownership && <div><dt>Land access</dt><dd>{humanize(territory.ownership)}</dd></div>}
                 {territory.fenceStatus && <div><dt>Hunt setting</dt><dd>{humanize(territory.fenceStatus)}</dd></div>}
                 {strings(territory.terrain).length > 0 && <div><dt>Terrain</dt><dd>{strings(territory.terrain).join(', ')}</dd></div>}
+                {accessMethods.length > 0 && <div><dt>Field access</dt><dd>{accessMethods.join(', ')}</dd></div>}
                 {territory.elevation && <div><dt>Elevation</dt><dd>{String(territory.elevation)}</dd></div>}
               </dl>
             </section>

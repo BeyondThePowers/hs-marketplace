@@ -282,6 +282,10 @@ withdrawal fails closed.
 - A separate simple and advanced mode is intentionally avoided. Progressive
   disclosure keeps the normal case direct while revealing the combination
   species rule only when it can change the meaning of a search.
+- The former hunting-method facet has been replaced by independent Equipment,
+  Hunt style, Terrain, and Access facets. Their source and compatibility rules
+  are defined in `HUNT_TAXONOMY_CONTRACT.md`. The marketplace does not infer
+  these values from prose or split legacy values with runtime heuristics.
 
 Completed since this plan was written:
 

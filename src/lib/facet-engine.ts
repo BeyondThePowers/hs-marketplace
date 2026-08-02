@@ -1,4 +1,4 @@
-export const categoricalFacets = ['destination', 'species', 'tripType', 'method'] as const;
+export const categoricalFacets = ['destination', 'species', 'tripType', 'equipment', 'technique', 'terrain', 'access'] as const;
 
 export type CategoricalFacet = (typeof categoricalFacets)[number];
 export type SpeciesMode = 'any' | 'all';
@@ -11,7 +11,10 @@ export type FacetRecord = {
   region: string;
   species: string[];
   tripType: string;
-  methods: string[];
+  equipment: string[];
+  techniques: string[];
+  terrain: string[];
+  access: string[];
   price: number | null;
   huntingDays: number;
 };
@@ -23,7 +26,10 @@ export type FacetState = {
   species: string[];
   speciesMode: SpeciesMode;
   tripTypes: string[];
-  methods: string[];
+  equipment: string[];
+  techniques: string[];
+  terrain: string[];
+  access: string[];
   maxPrice: number;
   minDays: number;
 };
@@ -35,7 +41,10 @@ export const emptyFacetState = (): FacetState => ({
   species: [],
   speciesMode: 'any',
   tripTypes: [],
-  methods: [],
+  equipment: [],
+  techniques: [],
+  terrain: [],
+  access: [],
   maxPrice: 0,
   minDays: 0,
 });
@@ -69,7 +78,10 @@ export const matchesFacetState = (
   }
 
   if (omittedFacet !== 'tripType' && !overlaps([record.tripType], state.tripTypes)) return false;
-  if (omittedFacet !== 'method' && !overlaps(record.methods, state.methods)) return false;
+  if (omittedFacet !== 'equipment' && !overlaps(record.equipment, state.equipment)) return false;
+  if (omittedFacet !== 'technique' && !overlaps(record.techniques, state.techniques)) return false;
+  if (omittedFacet !== 'terrain' && !overlaps(record.terrain, state.terrain)) return false;
+  if (omittedFacet !== 'access' && !overlaps(record.access, state.access)) return false;
   if (state.maxPrice && (record.price === null || record.price > state.maxPrice)) return false;
   if (state.minDays && record.huntingDays < state.minDays) return false;
 
@@ -93,7 +105,10 @@ export const contextualFacetCount = (
   if (facet === 'destination') return record.country === value || record.region === value;
   if (facet === 'species') return record.species.includes(value);
   if (facet === 'tripType') return record.tripType === value;
-  return record.methods.includes(value);
+  if (facet === 'equipment') return record.equipment.includes(value);
+  if (facet === 'technique') return record.techniques.includes(value);
+  if (facet === 'terrain') return record.terrain.includes(value);
+  return record.access.includes(value);
 }).length;
 
 export const facetStateFromParams = (params: URLSearchParams): FacetState => ({
@@ -103,7 +118,10 @@ export const facetStateFromParams = (params: URLSearchParams): FacetState => ({
   species: params.getAll('species').filter(Boolean),
   speciesMode: params.get('speciesMode') === 'all' ? 'all' : 'any',
   tripTypes: params.getAll('tripType').filter(Boolean),
-  methods: params.getAll('method').filter(Boolean),
+  equipment: params.getAll('equipment').filter(Boolean),
+  techniques: params.getAll('technique').filter(Boolean),
+  terrain: params.getAll('terrain').filter(Boolean),
+  access: params.getAll('access').filter(Boolean),
   maxPrice: Number(params.get('maxPrice') || 0),
   minDays: Number(params.get('minDays') || 0),
 });
@@ -116,7 +134,10 @@ export const facetStateToParams = (state: FacetState) => {
   for (const value of state.species) params.append('species', value);
   if (state.species.length > 1 && state.speciesMode === 'all') params.set('speciesMode', 'all');
   for (const value of state.tripTypes) params.append('tripType', value);
-  for (const value of state.methods) params.append('method', value);
+  for (const value of state.equipment) params.append('equipment', value);
+  for (const value of state.techniques) params.append('technique', value);
+  for (const value of state.terrain) params.append('terrain', value);
+  for (const value of state.access) params.append('access', value);
   if (state.maxPrice) params.set('maxPrice', String(state.maxPrice));
   if (state.minDays) params.set('minDays', String(state.minDays));
   return params;

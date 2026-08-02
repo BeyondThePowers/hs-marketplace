@@ -16,9 +16,12 @@ const duration = record(hunt.duration_and_party ?? hunt.duration);
 const season = record(hunt.season_and_availability ?? hunt.season);
 const guiding = record(hunt.methods_and_guiding);
 const classification = record(hunt.classification);
-const methods = Array.isArray(classification?.methods)
-  ? classification.methods.map((item) => record(item)).filter(Boolean).map((item) => String(item?.name ?? item?.key ?? '')).filter(Boolean)
+const taxonomyNames = (value: unknown) => Array.isArray(value)
+  ? value.map((item) => record(item)).filter(Boolean).map((item) => String(item?.name ?? item?.key ?? '')).filter(Boolean)
   : [];
+const equipmentTypes = taxonomyNames(classification?.equipment);
+const compatibilityMethods = taxonomyNames(classification?.methods);
+const cardEquipment = equipmentTypes.length > 0 ? equipmentTypes : compatibilityMethods;
 const price = hunt.starting_price === null
   ? 'Contact for price'
   : new Intl.NumberFormat('en-US', {
@@ -53,7 +56,7 @@ const tripType = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
       <div><dt>Season</dt><dd>{String(season?.display ?? 'Ask outfitter')}</dd></div>
       <div><dt>Duration</dt><dd>{durationLabel}</dd></div>
       <div><dt>Guiding</dt><dd>{String(guiding?.arrangement ?? 'Guided').replaceAll('-', ' ')}</dd></div>
-      <div><dt>Method</dt><dd>{methods.slice(0, 2).join(', ') || 'See hunt details'}</dd></div>
+      <div><dt>Equipment</dt><dd>{cardEquipment.slice(0, 2).join(', ') || 'See hunt details'}</dd></div>
     </dl>
     <div class="card-bottom">
       <div class="species">{(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}</div>
