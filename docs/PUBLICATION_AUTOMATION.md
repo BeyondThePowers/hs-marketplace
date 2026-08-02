@@ -60,3 +60,15 @@ be included in browser code, source feeds, logs, or committed environment files.
 5. Confirm older coalesced revisions are `superseded`.
 6. Simulate a failed build in development and confirm the request becomes
    `failed` without altering the last verified public deployment.
+
+## Development verification on 2026-08-01
+
+- Unchanged reconciliations for JJ and ABH produced zero entity changes, zero
+  pending revisions, and zero Netlify deployments.
+- The latest verified revision was deliberately requeued as a no-content-change
+  forced republish.
+- The minute scheduler claimed it once after the debounce window.
+- Netlify deployed commit `f07d2d3` once as deployment
+  `6a6e9959a5fb990008ed611f`.
+- The deploy event matched the embedded revision ID and hash and changed the
+  database record to `verified`.

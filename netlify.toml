@@ -17,6 +17,9 @@
 [functions."scheduled-publication-build"]
   schedule = "* * * * *"
 
+[functions."scheduled-participation-guard"]
+  schedule = "* * * * *"
+
 [dev]
   command = "npm run dev"
   port = 8889

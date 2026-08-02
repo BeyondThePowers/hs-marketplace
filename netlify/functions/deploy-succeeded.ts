@@ -1,4 +1,5 @@
 import type { Handler } from '@netlify/functions';
+import { refreshParticipationManifest } from '../../src/lib/participation-guard';
 import { verifyPublicationDeployment } from '../../src/lib/publication-build';
 
 export const handler: Handler = async (event) => {
@@ -20,6 +21,11 @@ export const handler: Handler = async (event) => {
 
   try {
     const result = await verifyPublicationDeployment(deploymentId, deploymentUrl);
+    try {
+      await refreshParticipationManifest();
+    } catch (error) {
+      console.error('[marketplace-participation] Post-deploy guard refresh failed', error);
+    }
     console.log('[marketplace-publication] Deployment verified', result);
     return { statusCode: 200, body: JSON.stringify(result) };
   } catch (error) {

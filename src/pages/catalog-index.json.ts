@@ -17,6 +17,7 @@ export const GET: APIRoute = async () => {
     generatedAt: catalog.generatedAt,
     hunts: catalog.hunts.map((hunt) => ({
       listingId: hunt.listing_id,
+      sourceId: hunt.source_id,
       title: hunt.title,
       summary: hunt.summary,
       outfitter: hunt.outfitter_name,

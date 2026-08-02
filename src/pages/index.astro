@@ -35,6 +35,7 @@ const formatPrice = (amount: number | null, currency: string | null) => {
 const featuredImage = imageUrl(allHunts[0]?.id ?? null);
 const searchData = allHunts.map((hunt) => ({
   id: hunt.listing_id,
+  sourceId: hunt.source_id,
   search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? [])]
     .filter(Boolean)
     .join(' ')
@@ -112,7 +113,7 @@ const collectionSchema = {
 
     <div class="hunt-grid">
         {allHunts.map((hunt) => (
-          <article class="hunt-card" data-listing-id={hunt.listing_id}>
+          <article class="hunt-card" data-listing-id={hunt.listing_id} data-marketplace-source={hunt.source_id}>
             <a class="card-image" href={`/hunts/${hunt.listing_id}`}>
               {imageUrl(hunt.id) ? (
                 <img src={imageUrl(hunt.id)!} alt={mediaByHunt.get(hunt.id!)?.alt || hunt.title || ''} loading="lazy" />
@@ -153,7 +154,7 @@ const collectionSchema = {
       </div>
       <div class="outfitter-list">
         {(outfitters ?? []).map((outfitter) => (
-          <a href={outfitter.public_id ? `/outfitters/${outfitter.public_id}` : outfitter.profile_url || '#'}>
+          <a data-marketplace-source={outfitter.source_id} href={outfitter.public_id ? `/outfitters/${outfitter.public_id}` : outfitter.profile_url || '#'}>
             <strong>{outfitter.name}</strong>
             <span>{outfitter.tagline}</span>
           </a>
@@ -177,6 +178,7 @@ const collectionSchema = {
   if (form && dataElement) {
     const records = JSON.parse(dataElement.textContent || '[]') as Array<{
       id: string;
+      sourceId: string;
       search: string;
       country: string;
       species: string[];
@@ -184,6 +186,7 @@ const collectionSchema = {
     const queryInput = form.elements.namedItem('q') as HTMLInputElement;
     const countryInput = form.elements.namedItem('country') as HTMLSelectElement;
     const speciesInput = form.elements.namedItem('species') as HTMLSelectElement;
+    const inactiveSources = (window as Window & { __MARKETPLACE_INACTIVE_SOURCES__?: string[] }).__MARKETPLACE_INACTIVE_SOURCES__ ?? [];
 
     const apply = () => {
       const query = queryInput.value.trim().toLocaleLowerCase();
@@ -193,12 +196,15 @@ const collectionSchema = {
 
       for (const record of records) {
         const matches =
+          !inactiveSources.includes(record.sourceId) &&
           (!query || record.search.includes(query)) &&
           (!country || record.country === country) &&
           (!species || record.species.includes(species));
         const card = cards.get(record.id);
-        if (card) card.hidden = !matches;
-        if (matches) visible += 1;
+        if (card) {
+          card.hidden = !matches;
+          if (matches) visible += 1;
+        }
       }
 
       if (count) count.textContent = String(visible);
