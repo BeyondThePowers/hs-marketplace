@@ -62,10 +62,14 @@ Verified state:
 | Netlify site | `https://huntseeker-marketplace.netlify.app/` |
 
 The development database has all committed migrations through
-`20260801014000_publication_build_queue.sql`. Participation controls,
+`20260801015000_control_change_publications.sql`. Participation controls,
 publication triggers, row-level security, public views, audited moderation,
 scheduled reconciliation, authenticated optional webhooks, protected
 source-health diagnostics, and the revision-driven build queue are installed.
+
+The live deployment also includes a Blob-backed edge participation guard.
+Development pause and restoration testing removed JJ within 18 seconds and
+then restored the complete 11-hunt catalog through a verified publication.
 
 Current public catalog state:
 
