@@ -22,6 +22,10 @@ const huntMethods = (hunt: (typeof allHunts)[number]) => records(record(hunt.cla
   .map((method) => String(method.name ?? method.key ?? ''))
   .filter(Boolean);
 const methods = [...new Set(allHunts.flatMap(huntMethods))].sort();
+const destinationGroups = countries.map((country) => ({
+  country,
+  regions: [...new Set(allHunts.filter((hunt) => hunt.country === country).map((hunt) => hunt.region).filter(Boolean))].sort(),
+}));
 const destinationLinks = regions.map((region) => {
   const country = allHunts.find((hunt) => hunt.region === region)?.country ?? '';
   return { name: region, country, href: `/destinations/${publicSlug(`${region}-${country}`)}` };
@@ -126,17 +130,71 @@ const collectionSchema = {
           <label class="search-field"><span>Search hunts</span><input name="q" type="search" placeholder="Species, region, or outfitter" autocomplete="off" /></label>
           <details open>
             <summary>Destination</summary>
-            <div class="filter-group">
-              <label><span>Country</span><select name="country"><option value="">All countries</option>{countries.map((item) => <option value={item}>{item}</option>)}</select></label>
-              <label><span>Region</span><select name="region"><option value="">All regions</option>{regions.map((item) => <option value={item}>{item}</option>)}</select></label>
+            <div class="filter-group facet-options">
+              {destinationGroups.map((group) => (
+                <div class="destination-group">
+                  <label class="check-option destination-parent" data-facet-option>
+                    <input type="checkbox" name="country" value={group.country} data-facet="destination" data-label={group.country} />
+                    <span>{group.country}</span>
+                    <small data-facet-count data-facet="destination" data-value={group.country}>{allHunts.filter((hunt) => hunt.country === group.country).length}</small>
+                  </label>
+                  <div class="destination-children">
+                    {group.regions.map((region) => (
+                      <label class="check-option" data-facet-option>
+                        <input type="checkbox" name="region" value={region} data-facet="destination" data-label={region} />
+                        <span>{region}</span>
+                        <small data-facet-count data-facet="destination" data-value={region}>{allHunts.filter((hunt) => hunt.region === region).length}</small>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </details>
           <details open>
-            <summary>Hunting experience</summary>
+            <summary>Species</summary>
             <div class="filter-group">
-              <label><span>Species</span><select name="species"><option value="">All species</option>{speciesOptions.map((item) => <option value={item}>{item}</option>)}</select></label>
-              <label><span>Trip type</span><select name="tripType"><option value="">All trip types</option>{tripTypes.map((item) => <option value={item}>{humanize(item)}</option>)}</select></label>
-              <label><span>Method</span><select name="method"><option value="">All methods</option>{methods.map((item) => <option value={item}>{item}</option>)}</select></label>
+              {speciesOptions.length > 7 && <label class="facet-search"><span>Find a species</span><input type="search" placeholder="Search species" autocomplete="off" data-facet-search="species" /></label>}
+              <div class="facet-options" data-facet-list="species">
+                {speciesOptions.map((item) => (
+                  <label class="check-option" data-facet-option>
+                    <input type="checkbox" name="species" value={item} data-facet="species" data-label={item} />
+                    <span>{item}</span>
+                    <small data-facet-count data-facet="species" data-value={item}>{allHunts.filter((hunt) => [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])].includes(item)).length}</small>
+                  </label>
+                ))}
+              </div>
+              <label class="species-mode" data-species-mode hidden>
+                <input type="checkbox" name="speciesMode" value="all" />
+                <span>Only hunts including every selected species</span>
+              </label>
+            </div>
+          </details>
+          <details>
+            <summary>Hunt type</summary>
+            <div class="filter-group facet-options">
+              {tripTypes.map((item) => (
+                <label class="check-option" data-facet-option>
+                  <input type="checkbox" name="tripType" value={item} data-facet="tripType" data-label={humanize(item)} />
+                  <span>{humanize(item)}</span>
+                  <small data-facet-count data-facet="tripType" data-value={item}>{allHunts.filter((hunt) => hunt.trip_type === item).length}</small>
+                </label>
+              ))}
+            </div>
+          </details>
+          <details>
+            <summary>Hunting method</summary>
+            <div class="filter-group">
+              {methods.length > 7 && <label class="facet-search"><span>Find a method</span><input type="search" placeholder="Search methods" autocomplete="off" data-facet-search="method" /></label>}
+              <div class="facet-options" data-facet-list="method">
+                {methods.map((item) => (
+                  <label class="check-option" data-facet-option>
+                    <input type="checkbox" name="method" value={item} data-facet="method" data-label={item} />
+                    <span>{item}</span>
+                    <small data-facet-count data-facet="method" data-value={item}>{allHunts.filter((hunt) => huntMethods(hunt).includes(item)).length}</small>
+                  </label>
+                ))}
+              </div>
             </div>
           </details>
           <details>
@@ -146,7 +204,7 @@ const collectionSchema = {
               <label><span>Minimum hunting days</span><select name="minDays"><option value="">Any length</option><option value="2">2 or more days</option><option value="3">3 or more days</option><option value="5">5 or more days</option></select></label>
             </div>
           </details>
-          <div class="filter-footer"><button class="apply-filters" type="submit">Show hunts</button><button class="clear" type="button" data-clear hidden>Clear all</button></div>
+          <div class="filter-footer"><button class="apply-filters" type="submit">Show <span data-draft-count>{allHunts.length}</span> hunts</button><button class="clear" type="button" data-clear hidden>Clear all</button></div>
         </form>
       </aside>
 
@@ -180,13 +238,25 @@ const collectionSchema = {
 
 <script type="application/json" id="catalog-search-data" set:html={JSON.stringify(searchData)} />
 <script>
+  import {
+    contextualFacetCount,
+    emptyFacetState,
+    facetStateFromParams,
+    facetStateToParams,
+    filterFacetRecords,
+    type CategoricalFacet,
+    type FacetRecord,
+    type FacetState,
+  } from '../lib/facet-engine';
+
   const form = document.querySelector<HTMLFormElement>('.filters');
   const dataElement = document.querySelector<HTMLScriptElement>('#catalog-search-data');
   const cards = new Map(
     [...document.querySelectorAll<HTMLElement>('[data-listing-id]')].map((card) => [card.dataset.listingId, card])
   );
   const count = document.querySelector<HTMLElement>('[data-result-count]');
-  const label = document.querySelector<HTMLElement>('[data-result-label]');
+  const resultLabel = document.querySelector<HTMLElement>('[data-result-label]');
+  const draftCount = document.querySelector<HTMLElement>('[data-draft-count]');
   const empty = document.querySelector<HTMLElement>('[data-empty]');
   const panel = document.querySelector<HTMLElement>('[data-filter-panel]');
   const backdrop = document.querySelector<HTMLElement>('[data-filter-backdrop]');
@@ -194,146 +264,211 @@ const collectionSchema = {
   const closeButton = document.querySelector<HTMLButtonElement>('[data-filter-close]');
   const activeFilters = document.querySelector<HTMLElement>('[data-active-filters]');
   const activeCount = document.querySelector<HTMLElement>('[data-active-count]');
-
-  const setPanelOpen = (open: boolean) => {
-    if (panel) panel.dataset.open = open ? 'true' : 'false';
-    if (backdrop) backdrop.dataset.open = open ? 'true' : 'false';
-    if (openButton) openButton.setAttribute('aria-expanded', String(open));
-    document.body.style.overflow = open ? 'hidden' : '';
-  };
-
-  openButton?.addEventListener('click', () => setPanelOpen(true));
-  closeButton?.addEventListener('click', () => setPanelOpen(false));
-  backdrop?.addEventListener('click', () => setPanelOpen(false));
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') setPanelOpen(false);
-  });
+  const mobileQuery = window.matchMedia('(max-width: 900px)');
 
   if (form && dataElement) {
-    const records = JSON.parse(dataElement.textContent || '[]') as Array<{
-      id: string;
-      sourceId: string;
-      search: string;
-      country: string;
-      region: string;
-      species: string[];
-      tripType: string;
-      methods: string[];
-      price: number | null;
-      huntingDays: number;
-    }>;
-    const queryInput = form.elements.namedItem('q') as HTMLInputElement;
-    const countryInput = form.elements.namedItem('country') as HTMLSelectElement;
-    const speciesInput = form.elements.namedItem('species') as HTMLSelectElement;
-    const regionInput = form.elements.namedItem('region') as HTMLSelectElement;
-    const tripTypeInput = form.elements.namedItem('tripType') as HTMLSelectElement;
-    const methodInput = form.elements.namedItem('method') as HTMLSelectElement;
-    const maxPriceInput = form.elements.namedItem('maxPrice') as HTMLSelectElement;
-    const minDaysInput = form.elements.namedItem('minDays') as HTMLSelectElement;
+    const records = JSON.parse(dataElement.textContent || '[]') as FacetRecord[];
     const inactiveSources = (window as Window & { __MARKETPLACE_INACTIVE_SOURCES__?: string[] }).__MARKETPLACE_INACTIVE_SOURCES__ ?? [];
+    let committedState = facetStateFromParams(new URLSearchParams(window.location.search));
 
-    const apply = (updateUrl = true) => {
-      const query = queryInput.value.trim().toLocaleLowerCase();
-      const country = countryInput.value;
-      const species = speciesInput.value;
-      const region = regionInput.value;
-      const tripType = tripTypeInput.value;
-      const method = methodInput.value;
-      const maxPrice = Number(maxPriceInput.value || 0);
-      const minDays = Number(minDaysInput.value || 0);
-      let visible = 0;
+    const checkedValues = (name: string) => [...form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((input) => input.value);
+    const stateFromForm = (): FacetState => {
+      const species = checkedValues('species');
+      return {
+        q: (form.elements.namedItem('q') as HTMLInputElement).value,
+        countries: checkedValues('country'),
+        regions: checkedValues('region'),
+        species,
+        speciesMode: species.length > 1 && (form.elements.namedItem('speciesMode') as HTMLInputElement).checked ? 'all' : 'any',
+        tripTypes: checkedValues('tripType'),
+        methods: checkedValues('method'),
+        maxPrice: Number((form.elements.namedItem('maxPrice') as HTMLSelectElement).value || 0),
+        minDays: Number((form.elements.namedItem('minDays') as HTMLSelectElement).value || 0),
+      };
+    };
 
-      for (const record of records) {
-        const matches =
-          !inactiveSources.includes(record.sourceId) &&
-          (!query || record.search.includes(query)) &&
-          (!country || record.country === country) &&
-          (!region || record.region === region) &&
-          (!species || record.species.includes(species)) &&
-          (!tripType || record.tripType === tripType) &&
-          (!method || record.methods.includes(method)) &&
-          (!maxPrice || (record.price !== null && record.price <= maxPrice)) &&
-          (!minDays || record.huntingDays >= minDays);
-        const card = cards.get(record.id);
-        if (card) {
-          card.hidden = !matches;
-          if (matches) visible += 1;
-        }
+    const setCheckboxes = (name: string, values: string[]) => {
+      form.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((input) => {
+        input.checked = values.includes(input.value);
+      });
+    };
+
+    const writeStateToForm = (state: FacetState) => {
+      (form.elements.namedItem('q') as HTMLInputElement).value = state.q;
+      setCheckboxes('country', state.countries);
+      setCheckboxes('region', state.regions);
+      setCheckboxes('species', state.species);
+      setCheckboxes('tripType', state.tripTypes);
+      setCheckboxes('method', state.methods);
+      (form.elements.namedItem('speciesMode') as HTMLInputElement).checked = state.speciesMode === 'all';
+      (form.elements.namedItem('maxPrice') as HTMLSelectElement).value = state.maxPrice ? String(state.maxPrice) : '';
+      (form.elements.namedItem('minDays') as HTMLSelectElement).value = state.minDays ? String(state.minDays) : '';
+    };
+
+    const optionInputs = () => [...form.querySelectorAll<HTMLInputElement>('input[data-facet]')];
+    const selectedOptionCount = (state: FacetState) =>
+      state.countries.length + state.regions.length + state.species.length + state.tripTypes.length + state.methods.length +
+      Number(Boolean(state.q.trim())) + Number(Boolean(state.maxPrice)) + Number(Boolean(state.minDays));
+
+    const updateSpeciesMode = (state: FacetState) => {
+      const control = form.querySelector<HTMLElement>('[data-species-mode]');
+      if (!control) return;
+      control.hidden = state.species.length < 2;
+      if (state.species.length < 2) (form.elements.namedItem('speciesMode') as HTMLInputElement).checked = false;
+    };
+
+    const updateFacetCounts = (state: FacetState) => {
+      form.querySelectorAll<HTMLElement>('[data-facet-count]').forEach((element) => {
+        const facet = element.dataset.facet as CategoricalFacet;
+        const value = element.dataset.value ?? '';
+        const optionCount = contextualFacetCount(records, state, facet, value, inactiveSources);
+        element.textContent = String(optionCount);
+        const input = form.querySelector<HTMLInputElement>(`input[data-facet="${CSS.escape(facet)}"][value="${CSS.escape(value)}"]`);
+        if (input) input.disabled = optionCount === 0 && !input.checked;
+      });
+    };
+
+    const renderChips = (state: FacetState) => {
+      if (!activeFilters) return;
+      activeFilters.replaceChildren();
+      const appendChip = (label: string, remove: () => void) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.textContent = `${label} ×`;
+        chip.setAttribute('aria-label', `Remove ${label} filter`);
+        chip.addEventListener('click', remove);
+        activeFilters.append(chip);
+      };
+      const controls: Array<{ name: keyof Pick<FacetState, 'countries' | 'regions' | 'species' | 'tripTypes' | 'methods'>; value: string; label: string }> = [];
+      for (const input of optionInputs().filter((item) => item.checked)) {
+        const names = { country: 'countries', region: 'regions', species: 'species', tripType: 'tripTypes', method: 'methods' } as const;
+        controls.push({ name: names[input.name as keyof typeof names], value: input.value, label: input.dataset.label ?? input.value });
       }
+      for (const control of controls) {
+        appendChip(control.label, () => {
+          committedState = { ...committedState, [control.name]: committedState[control.name].filter((value) => value !== control.value) };
+          writeStateToForm(committedState);
+          commit(committedState);
+        });
+      }
+      const removeConstraint = (next: FacetState) => {
+        writeStateToForm(next);
+        commit(next);
+      };
+      if (state.q.trim()) appendChip(`Search: ${state.q.trim()}`, () => removeConstraint({ ...committedState, q: '' }));
+      if (state.maxPrice) appendChip(`Up to $${state.maxPrice.toLocaleString()}`, () => removeConstraint({ ...committedState, maxPrice: 0 }));
+      if (state.minDays) appendChip(`${state.minDays}+ hunting days`, () => removeConstraint({ ...committedState, minDays: 0 }));
+    };
 
-      if (count) count.textContent = String(visible);
-      if (label) label.textContent = visible === 1 ? 'hunt' : 'hunts';
-      if (empty) empty.hidden = visible !== 0;
-      const active = Boolean(query || country || region || species || tripType || method || maxPrice || minDays);
-      document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => (button.hidden = !active));
-
-      const selectedControls = [...form.elements].filter((control): control is HTMLInputElement | HTMLSelectElement =>
-        (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) && Boolean(control.name && control.value)
-      );
+    const renderResults = (state: FacetState, updateUrl = true) => {
+      const matching = filterFacetRecords(records, state, inactiveSources);
+      const matchingIds = new Set(matching.map((record) => record.id));
+      for (const [id, card] of cards) card.hidden = !matchingIds.has(id ?? '');
+      if (count) count.textContent = String(matching.length);
+      if (resultLabel) resultLabel.textContent = matching.length === 1 ? 'hunt' : 'hunts';
+      if (empty) empty.hidden = matching.length !== 0;
+      const selectedCount = selectedOptionCount(state);
+      document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => (button.hidden = selectedCount === 0));
       if (activeCount) {
-        activeCount.textContent = String(selectedControls.length);
-        activeCount.hidden = selectedControls.length === 0;
+        activeCount.textContent = String(selectedCount);
+        activeCount.hidden = selectedCount === 0;
       }
-      if (activeFilters) {
-        activeFilters.replaceChildren();
-        for (const control of selectedControls) {
-          const chip = document.createElement('button');
-          chip.type = 'button';
-          const fieldLabel = control.closest('label')?.querySelector('span')?.textContent?.trim();
-          const valueLabel = control instanceof HTMLSelectElement
-            ? control.selectedOptions[0]?.textContent?.trim()
-            : control.value;
-          chip.textContent = `${fieldLabel}: ${valueLabel} ×`;
-          chip.addEventListener('click', () => {
-            control.value = '';
-            apply();
-          });
-          activeFilters.append(chip);
-        }
-      }
-
-      const params = new URLSearchParams();
-      if (queryInput.value.trim()) params.set('q', queryInput.value.trim());
-      if (country) params.set('country', country);
-      if (species) params.set('species', species);
-      if (region) params.set('region', region);
-      if (tripType) params.set('tripType', tripType);
-      if (method) params.set('method', method);
-      if (maxPrice) params.set('maxPrice', String(maxPrice));
-      if (minDays) params.set('minDays', String(minDays));
+      renderChips(state);
+      updateFacetCounts(state);
+      updateSpeciesMode(state);
       if (updateUrl) {
-        const nextUrl = `${window.location.pathname}${params.size ? `?${params}` : ''}#hunts`;
-        history.replaceState(null, '', nextUrl);
+        const params = facetStateToParams(state);
+        history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}#hunts`);
       }
     };
 
-    const initial = new URLSearchParams(window.location.search);
-    queryInput.value = initial.get('q') ?? '';
-    countryInput.value = initial.get('country') ?? '';
-    speciesInput.value = initial.get('species') ?? '';
-    regionInput.value = initial.get('region') ?? '';
-    tripTypeInput.value = initial.get('tripType') ?? '';
-    methodInput.value = initial.get('method') ?? '';
-    maxPriceInput.value = initial.get('maxPrice') ?? '';
-    minDaysInput.value = initial.get('minDays') ?? '';
+    const renderDraft = (state: FacetState) => {
+      const matching = filterFacetRecords(records, state, inactiveSources);
+      if (draftCount) draftCount.textContent = String(matching.length);
+      updateFacetCounts(state);
+      updateSpeciesMode(state);
+    };
+
+    const commit = (state: FacetState, updateUrl = true) => {
+      committedState = state;
+      renderResults(state, updateUrl);
+      if (draftCount) draftCount.textContent = String(filterFacetRecords(records, state, inactiveSources).length);
+    };
+
+    const closePanel = (restore = true) => {
+      if (restore) writeStateToForm(committedState);
+      if (panel) panel.dataset.open = 'false';
+      if (backdrop) backdrop.dataset.open = 'false';
+      if (openButton) openButton.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    };
+
+    const openPanel = () => {
+      writeStateToForm(committedState);
+      renderDraft(committedState);
+      if (panel) panel.dataset.open = 'true';
+      if (backdrop) backdrop.dataset.open = 'true';
+      if (openButton) openButton.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      closeButton?.focus();
+    };
+
+    openButton?.addEventListener('click', openPanel);
+    closeButton?.addEventListener('click', () => closePanel());
+    backdrop?.addEventListener('click', () => closePanel());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && panel?.dataset.open === 'true') closePanel();
+    });
+
     form.addEventListener('submit', (event) => {
       event.preventDefault();
-      apply();
-      setPanelOpen(false);
+      commit(stateFromForm());
+      closePanel(false);
     });
-    form.addEventListener('input', () => apply());
-    form.addEventListener('change', () => apply());
-    document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => {
-      button.addEventListener('click', () => {
-        form.reset();
-        apply();
+
+    const handleFormChange = (event: Event) => {
+      if (event.target instanceof HTMLInputElement && event.target.matches('[data-facet-search]')) return;
+      const draft = stateFromForm();
+      if (mobileQuery.matches) renderDraft(draft);
+      else commit(draft);
+    };
+    form.addEventListener('input', handleFormChange);
+
+    form.querySelectorAll<HTMLInputElement>('[data-facet-search]').forEach((search) => {
+      search.addEventListener('input', () => {
+        const list = form.querySelector<HTMLElement>(`[data-facet-list="${search.dataset.facetSearch}"]`);
+        const query = search.value.trim().toLocaleLowerCase();
+        list?.querySelectorAll<HTMLElement>('[data-facet-option]').forEach((option) => {
+          option.hidden = Boolean(query && !option.textContent?.toLocaleLowerCase().includes(query));
+        });
       });
     });
-    apply(false);
+
+    document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const cleared = emptyFacetState();
+        writeStateToForm(cleared);
+        if (mobileQuery.matches && panel?.dataset.open === 'true') renderDraft(cleared);
+        else commit(cleared);
+      });
+    });
+
+    window.addEventListener('popstate', () => {
+      committedState = facetStateFromParams(new URLSearchParams(window.location.search));
+      writeStateToForm(committedState);
+      renderResults(committedState, false);
+    });
+
+    writeStateToForm(committedState);
+    renderResults(committedState, false);
   }
 </script>
 
 <style>
+  :global([hidden]) {
+    display: none !important;
+  }
+
   .hero {
     position: relative;
     min-height: 610px;
@@ -500,7 +635,7 @@ const collectionSchema = {
     text-transform: uppercase;
   }
 
-  .filters input,
+  .filters input:not([type='checkbox']),
   .filters select {
     width: 100%;
     min-height: 46px;
@@ -835,7 +970,7 @@ const collectionSchema = {
     text-transform: uppercase;
   }
 
-  .filters input,
+  .filters input:not([type='checkbox']),
   .filters select {
     width: 100%;
     min-height: 44px;
@@ -882,6 +1017,111 @@ const collectionSchema = {
     gap: 14px;
   }
 
+  .facet-options {
+    display: grid;
+    gap: 2px;
+  }
+
+  .check-option {
+    min-height: 38px;
+    padding: 6px 4px;
+    display: grid !important;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px !important;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+
+  .check-option:hover {
+    background: #f5f6f1;
+  }
+
+  .check-option input,
+  .species-mode input {
+    width: 17px;
+    height: 17px;
+    margin: 0;
+    accent-color: var(--accent-strong);
+  }
+
+  .filters .check-option > span,
+  .filters .species-mode > span {
+    color: var(--foreground);
+    font-size: .81rem;
+    font-weight: 540;
+    letter-spacing: 0;
+    line-height: 1.3;
+    text-transform: none;
+  }
+
+  .check-option small {
+    min-width: 25px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: #f0f2ec;
+    color: var(--muted);
+    font-size: .65rem;
+    text-align: center;
+  }
+
+  .check-option:has(input:checked) {
+    background: #eef1e9;
+  }
+
+  .check-option:has(input:checked) small {
+    background: var(--accent-strong);
+    color: #fff;
+  }
+
+  .check-option:has(input:disabled) {
+    color: #8c928c;
+    cursor: not-allowed;
+    opacity: .55;
+  }
+
+  .destination-group + .destination-group {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .destination-parent > span {
+    font-weight: 720 !important;
+  }
+
+  .destination-children {
+    margin-left: 17px;
+    padding-left: 11px;
+    display: grid;
+    border-left: 1px solid #dfe3db;
+  }
+
+  .facet-search {
+    margin-bottom: 3px;
+  }
+
+  .facet-search input {
+    min-height: 38px !important;
+  }
+
+  .species-mode {
+    margin-top: 8px;
+    padding: 12px;
+    display: grid !important;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+    gap: 9px !important;
+    border: 1px solid #d8ded3;
+    border-radius: 8px;
+    background: #f7f8f4;
+    cursor: pointer;
+  }
+
+  .species-mode[hidden] {
+    display: none !important;
+  }
+
   .filter-footer {
     padding: 18px 20px;
     display: grid;
@@ -896,6 +1136,7 @@ const collectionSchema = {
     color: #fff;
     font-weight: 730;
     cursor: pointer;
+    display: none;
   }
 
   .filters .clear {
@@ -1025,6 +1266,19 @@ const collectionSchema = {
       border: 0;
       border-radius: 0;
       box-shadow: none;
+    }
+
+    .filter-footer {
+      position: sticky;
+      z-index: 2;
+      bottom: 0;
+      border-top: 1px solid var(--border);
+      background: rgba(255, 255, 255, .96);
+      backdrop-filter: blur(10px);
+    }
+
+    .filters .apply-filters {
+      display: inline-flex;
     }
 
     .filter-header {

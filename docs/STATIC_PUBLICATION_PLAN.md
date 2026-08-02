@@ -248,6 +248,41 @@ withdrawal fails closed.
   tested at 1,440 and 390 CSS pixels against the live 11-hunt development
   catalog.
 
+## Faceted discovery contract on 2026-08-01
+
+- Categorical filters are true multi-select facets. Values within species,
+  hunt type, hunting method, and destination use OR. Different facets use AND.
+  This is the default interaction model and URL contract, not a temporary
+  client-side shortcut.
+- Destination is one hierarchical facet. Country parents and region children
+  are alternatives within that facet, so hunters can compare several regions
+  or a whole country without constructing a Boolean query.
+- Species defaults to matching any selected species. Once two species are
+  selected, the interface reveals a plain-language option for hunts that
+  include every selected species. This supports deliberate combination-hunt
+  searches without exposing an advanced query builder.
+- Price and duration remain numeric constraints rather than categorical
+  facets. Future availability filtering must use date-window overlap, and
+  independent requirements such as equipment rental or accessibility must be
+  modeled as AND capabilities.
+- Counts are contextual and disjunctive. Each value count respects search,
+  numeric constraints, participation controls, and every other facet while
+  ignoring selections in its own facet. Selected zero-count values remain
+  removable; unavailable unselected values are disabled.
+- Desktop applies changes immediately. Mobile stages changes in the drawer and
+  exposes the prospective result count in a sticky `Show X hunts` action. A
+  dismissed drawer restores the committed state.
+- Repeated query parameters preserve multi-selection in shareable URLs, for
+  example `species=Dove&species=Duck`. `speciesMode=all` is emitted only when
+  the every-species option is active.
+- Facet evaluation is isolated in `src/lib/facet-engine.ts`, independent of the
+  current static browser index. The same state and URL contract can later run
+  against a sharded static index or server search without redesigning the
+  interface.
+- A separate simple and advanced mode is intentionally avoided. Progressive
+  disclosure keeps the normal case direct while revealing the combination
+  species rule only when it can change the meaning of a search.
+
 Completed since this plan was written:
 
 - Source-owned inquiry endpoints are live for JJ and ABH, and controlled
