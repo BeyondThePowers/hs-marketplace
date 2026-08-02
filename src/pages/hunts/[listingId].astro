@@ -56,6 +56,7 @@ const arrangedAccommodations = Array.isArray(hunt.accommodations)
   ? (hunt.accommodations as Array<Record<string, unknown>>).filter((item) => item.type === 'arranged')
   : [];
 const heroImage = media[0] ? mediaUrl(media[0]) : null;
+const galleryMedia = media.slice(0, 10).filter((item) => mediaUrl(item));
 const formatPrice = (amount: number | null, currency: string | null) =>
   amount === null
     ? 'Contact for price'
@@ -180,27 +181,57 @@ const huntSchema = [{
         </div>
       </section>
 
-      <section class="container detail-layout">
-        <article>
-          <p class="summary">{hunt.summary}</p>
-
-          {highlights.length > 0 && (
-            <ul class="highlights">
-              {highlights.map((highlight) => <li>{highlight}</li>)}
-            </ul>
-          )}
-
-          <div class="facts">
-            <div><span>Species</span><strong class="inline-links">{(hunt.primary_species ?? []).map((species, index) => <>{index > 0 && ', '}<a href={`/species/${publicSlug(species)}`}>{species}</a></>)}</strong></div>
-            {duration && <div><span>Duration</span><strong>{durationLabel}</strong></div>}
-            {season && <div><span>Season</span><strong>{seasonLabel}</strong></div>}
-            <div><span>Trip type</span><strong>{tripTypeLabel}</strong></div>
-            {methodTaxonomy.length > 0 && <div><span>Hunting methods</span><strong>{methodTaxonomy.join(', ')}</strong></div>}
-            {methodsAndGuiding?.arrangement && <div><span>Guiding</span><strong>{humanize(methodsAndGuiding.arrangement)}</strong></div>}
+      {galleryMedia.length > 0 && (
+        <section class="gallery-shell detail-wide" id="photos" aria-label={`${hunt.title} photographs`}>
+          <div class:list={["gallery-mosaic", galleryMedia.length === 1 && "single"]}>
+            <button class="gallery-primary" type="button" data-gallery-index="0" aria-label="Open photo 1">
+              <img src={mediaUrl(galleryMedia[0]) || ''} alt={galleryMedia[0].alt || hunt.title || ''} loading="eager" decoding="async" />
+            </button>
+            {galleryMedia.slice(1, 3).map((item, index) => (
+              <button class="gallery-secondary" type="button" data-gallery-index={String(index + 1)} aria-label={`Open photo ${index + 2}`}>
+                <img src={mediaUrl(item) || ''} alt={item.alt || hunt.title || ''} loading="eager" decoding="async" />
+                {index === Math.min(1, galleryMedia.length - 2) && galleryMedia.length > 3 && <span class="view-gallery">View all {galleryMedia.length} photos</span>}
+              </button>
+            ))}
           </div>
+        </section>
+      )}
+
+      <nav class="detail-nav" aria-label="Hunt page sections">
+        <div class="detail-wide">
+          <a href="#overview">Overview</a>
+          <a href="#experience">The hunt</a>
+          {(accommodations.length > 0 || arrangedAccommodations.length > 0) && <a href="#lodging">Lodging</a>}
+          <a href="#travel">Travel</a>
+          <a href="#package">Package</a>
+          <a href="#terms">Terms</a>
+        </div>
+      </nav>
+
+      <section class="detail-wide detail-layout">
+        <article>
+          <section class="overview-card" id="overview">
+            <p class="section-label">Package overview</p>
+            <p class="summary">{hunt.summary}</p>
+
+            {highlights.length > 0 && (
+              <ul class="highlights">
+                {highlights.map((highlight) => <li>{highlight}</li>)}
+              </ul>
+            )}
+
+            <div class="facts">
+              <div><span>Species</span><strong class="inline-links">{(hunt.primary_species ?? []).map((species, index) => <>{index > 0 && ', '}<a href={`/species/${publicSlug(species)}`}>{species}</a></>)}</strong></div>
+              {duration && <div><span>Duration</span><strong>{durationLabel}</strong></div>}
+              {season && <div><span>Season</span><strong>{seasonLabel}</strong></div>}
+              <div><span>Trip type</span><strong>{tripTypeLabel}</strong></div>
+              {methodTaxonomy.length > 0 && <div><span>Hunting methods</span><strong>{methodTaxonomy.join(', ')}</strong></div>}
+              {methodsAndGuiding?.arrangement && <div><span>Guiding</span><strong>{humanize(methodsAndGuiding.arrangement)}</strong></div>}
+            </div>
+          </section>
 
           {methodsAndGuiding && (
-            <section class="content-section">
+            <section class="content-section" id="experience">
               <p class="section-label">In the field</p>
               <h2>How the hunt is conducted</h2>
               <dl class="detail-grid">
@@ -278,7 +309,7 @@ const huntSchema = [{
           ))}
 
           {(accommodations.length > 0 || arrangedAccommodations.length > 0) && (
-            <section class="content-section accommodation-section">
+            <section class="content-section accommodation-section" id="lodging">
               <h2>Where you will stay</h2>
               <div class="accommodation-grid">
                 {accommodations.map(({ relation, lodge, media: lodgeMedia }) => lodge && (
@@ -308,7 +339,7 @@ const huntSchema = [{
           )}
 
           {(airports.length > 0 || travel?.transferTime) && (
-            <section class="content-section">
+            <section class="content-section" id="travel">
               <p class="section-label">Getting there</p>
               <h2>Travel and arrival</h2>
               <div class="travel-grid">
@@ -351,7 +382,7 @@ const huntSchema = [{
           )}
 
           {(inclusions.length > 0 || exclusions.length > 0) && (
-            <section class="content-section package-grid">
+            <section class="content-section package-grid" id="package">
               {inclusions.length > 0 && <div><h2>Included</h2><ul>{inclusions.map((item) => <li>{item}</li>)}</ul></div>}
               {exclusions.length > 0 && <div><h2>Not included</h2><ul>{exclusions.map((item) => <li>{item}</li>)}</ul></div>}
             </section>
@@ -401,23 +432,12 @@ const huntSchema = [{
           )}
 
           {terms && (
-            <section class="content-section">
+            <section class="content-section" id="terms">
               <h2>Booking terms</h2>
               <div class="faqs">
                 {terms.cancellationPolicy && <details><summary>Cancellation policy</summary><p>{String(terms.cancellationPolicy)}</p></details>}
                 {terms.trophyFeePolicy && <details><summary>Trophy fee policy</summary><p>{String(terms.trophyFeePolicy)}</p></details>}
                 {terms.woundingPolicy && <details><summary>Wounding policy</summary><p>{String(terms.woundingPolicy)}</p></details>}
-              </div>
-            </section>
-          )}
-
-          {media.length > 1 && (
-            <section class="gallery">
-              <h2>From the field</h2>
-              <div>
-                {media.slice(1, 7).map((item) => (
-                  <img src={mediaUrl(item) || ''} alt={item.alt || hunt.title || ''} loading="lazy" />
-                ))}
               </div>
             </section>
           )}
@@ -438,7 +458,7 @@ const huntSchema = [{
           )}
         </article>
 
-        <aside>
+        <aside id="inquiry">
           <p class="price-label">Starting price</p>
           <p class="price">{formatPrice(hunt.starting_price, hunt.currency)}</p>
           {priceOptions[0]?.basis && <p class="price-basis">{priceBasis(priceOptions[0].basis)}</p>}
@@ -468,6 +488,18 @@ const huntSchema = [{
           <a class="secondary" href={hunt.source_url || '#'}>View on outfitter site</a>
         </aside>
       </section>
+
+      <a class="mobile-inquiry-bar" href="#inquiry"><span><small>Starting from</small><strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong></span><b>Check availability</b></a>
+
+      {galleryMedia.length > 0 && (
+        <dialog class="gallery-dialog" data-gallery-dialog aria-label={`${hunt.title} photo gallery`}>
+          <button class="gallery-close" type="button" data-gallery-close aria-label="Close gallery">×</button>
+          <button class="gallery-previous" type="button" data-gallery-previous aria-label="Previous photo">‹</button>
+          <figure><img data-gallery-image src={mediaUrl(galleryMedia[0]) || ''} alt={galleryMedia[0].alt || hunt.title || ''} /><figcaption><span data-gallery-caption>{galleryMedia[0].caption || galleryMedia[0].alt}</span><small data-gallery-counter>1 / {galleryMedia.length}</small></figcaption></figure>
+          <button class="gallery-next" type="button" data-gallery-next aria-label="Next photo">›</button>
+        </dialog>
+      )}
+      <script type="application/json" id="hunt-gallery-data" set:html={JSON.stringify(galleryMedia.map((item) => ({ src: mediaUrl(item), alt: item.alt || hunt.title, caption: item.caption || item.alt || '' })))} />
     </>
   ) : (
     <section class="container not-found">
@@ -515,6 +547,50 @@ const huntSchema = [{
       } finally {
         if (button) button.disabled = false;
       }
+    });
+  }
+
+  const galleryDialog = document.querySelector<HTMLDialogElement>('[data-gallery-dialog]');
+  const galleryDataElement = document.querySelector<HTMLScriptElement>('#hunt-gallery-data');
+  if (galleryDialog && galleryDataElement) {
+    const galleryItems = JSON.parse(galleryDataElement.textContent || '[]') as Array<{ src: string; alt: string; caption: string }>;
+    const galleryImage = galleryDialog.querySelector<HTMLImageElement>('[data-gallery-image]');
+    const galleryCaption = galleryDialog.querySelector<HTMLElement>('[data-gallery-caption]');
+    const galleryCounter = galleryDialog.querySelector<HTMLElement>('[data-gallery-counter]');
+    let galleryIndex = 0;
+
+    const renderGalleryItem = () => {
+      const item = galleryItems[galleryIndex];
+      if (!item) return;
+      if (galleryImage) {
+        galleryImage.src = item.src;
+        galleryImage.alt = item.alt;
+      }
+      if (galleryCaption) galleryCaption.textContent = item.caption;
+      if (galleryCounter) galleryCounter.textContent = `${galleryIndex + 1} / ${galleryItems.length}`;
+    };
+    const moveGallery = (direction: number) => {
+      galleryIndex = (galleryIndex + direction + galleryItems.length) % galleryItems.length;
+      renderGalleryItem();
+    };
+
+    document.querySelectorAll<HTMLButtonElement>('[data-gallery-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        galleryIndex = Number(button.dataset.galleryIndex || 0);
+        renderGalleryItem();
+        galleryDialog.showModal();
+      });
+    });
+    galleryDialog.querySelector('[data-gallery-close]')?.addEventListener('click', () => galleryDialog.close());
+    galleryDialog.querySelector('[data-gallery-previous]')?.addEventListener('click', () => moveGallery(-1));
+    galleryDialog.querySelector('[data-gallery-next]')?.addEventListener('click', () => moveGallery(1));
+    galleryDialog.addEventListener('click', (event) => {
+      if (event.target === galleryDialog) galleryDialog.close();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!galleryDialog.open) return;
+      if (event.key === 'ArrowLeft') moveGallery(-1);
+      if (event.key === 'ArrowRight') moveGallery(1);
     });
   }
 </script>
@@ -1106,5 +1182,451 @@ const huntSchema = [{
       flex-direction: column;
       gap: 8px;
     }
+  }
+</style>
+
+<style>
+  .detail-wide {
+    width: min(1400px, calc(100% - 48px));
+    margin-inline: auto;
+  }
+
+  .detail-hero {
+    min-height: 510px;
+    align-items: end;
+  }
+
+  .detail-hero .shade {
+    background: linear-gradient(90deg, rgba(7, 12, 8, .88) 0%, rgba(7, 12, 8, .52) 54%, rgba(7, 12, 8, .14) 100%), linear-gradient(0deg, rgba(7, 12, 8, .82), transparent 62%);
+  }
+
+  .hero-inner {
+    padding-bottom: 90px;
+  }
+
+  .hero-inner .back {
+    margin-bottom: 72px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 999px;
+    background: rgba(7,12,8,.35);
+    backdrop-filter: blur(10px);
+  }
+
+  .hero-inner h1 {
+    max-width: 1050px;
+    font-size: clamp(3.4rem, 6.5vw, 6.6rem);
+  }
+
+  .gallery-shell {
+    position: relative;
+    z-index: 3;
+    margin-top: -50px;
+  }
+
+  .gallery-mosaic {
+    height: 520px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(280px, .82fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    border: 8px solid var(--background);
+    border-radius: 22px;
+    background: var(--background);
+    box-shadow: 0 28px 70px rgba(11,18,13,.16);
+  }
+
+  .gallery-mosaic.single {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-mosaic button {
+    position: relative;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: #dce1da;
+    cursor: zoom-in;
+  }
+
+  .gallery-primary {
+    grid-row: 1 / -1;
+  }
+
+  .gallery-mosaic img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 450ms cubic-bezier(.2,.7,.2,1), filter 250ms ease;
+  }
+
+  .gallery-mosaic button:hover img {
+    transform: scale(1.025);
+    filter: brightness(.92);
+  }
+
+  .view-gallery {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 999px;
+    background: rgba(7,12,8,.72);
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 720;
+    backdrop-filter: blur(10px);
+  }
+
+  .detail-nav {
+    position: sticky;
+    z-index: 8;
+    top: 0;
+    margin-top: 28px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: rgba(247,247,244,.94);
+    backdrop-filter: blur(14px);
+  }
+
+  .detail-nav > div {
+    display: flex;
+    gap: 30px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .detail-nav a {
+    padding: 17px 0 15px;
+    border-bottom: 2px solid transparent;
+    color: #4f5a52;
+    font-size: .78rem;
+    font-weight: 720;
+    white-space: nowrap;
+  }
+
+  .detail-nav a:hover {
+    border-bottom-color: var(--accent);
+    color: var(--foreground);
+  }
+
+  .detail-layout {
+    padding-top: 62px;
+    padding-bottom: 120px;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    gap: clamp(46px, 5vw, 82px);
+  }
+
+  .detail-layout > article {
+    min-width: 0;
+  }
+
+  .overview-card,
+  .content-section {
+    scroll-margin-top: 86px;
+    margin-bottom: 24px;
+    padding: clamp(30px, 4vw, 48px);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 14px 40px rgba(18,25,20,.045);
+  }
+
+  .overview-card .summary {
+    max-width: 920px;
+    margin-bottom: 0;
+    color: #2c3730;
+    font-size: clamp(1.35rem, 2vw, 1.85rem);
+  }
+
+  .overview-card .highlights {
+    margin: 34px 0;
+    padding: 24px;
+    border-radius: 14px;
+    background: #f3f1e9;
+  }
+
+  .overview-card .facts {
+    margin: 34px 0 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .content-section {
+    border-top: 1px solid var(--border);
+  }
+
+  .content-section h2 {
+    max-width: 720px;
+    margin-bottom: 24px;
+    font-size: clamp(2.2rem, 3.5vw, 3.6rem);
+    line-height: 1;
+  }
+
+  .detail-grid {
+    gap: 0 42px;
+  }
+
+  .accommodation-card {
+    border-radius: 14px;
+    box-shadow: 0 12px 30px rgba(18,25,20,.055);
+  }
+
+  .price-options article,
+  .service-list article,
+  .travel-grid article,
+  .itinerary li,
+  .faqs details {
+    border-radius: 11px;
+    background: #fafbf8;
+  }
+
+  .related-grid > a {
+    min-width: 0;
+    box-shadow: 0 10px 25px rgba(18,25,20,.05);
+  }
+
+  .detail-layout aside {
+    top: 82px;
+    padding: 30px;
+    border-color: #c7a16c;
+    border-radius: 18px;
+    box-shadow: 0 24px 65px rgba(19,31,22,.13);
+  }
+
+  .detail-layout aside::before {
+    content: 'Plan with the outfitter';
+    margin-bottom: 20px;
+    display: block;
+    color: var(--accent-strong);
+    font-size: .69rem;
+    font-weight: 760;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .detail-layout .price {
+    font-size: 2.7rem;
+    letter-spacing: -.035em;
+  }
+
+  .inquiry-form {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  .inquiry-form input,
+  .inquiry-form textarea {
+    background: #fafbf8;
+  }
+
+  .gallery-dialog {
+    width: min(1180px, calc(100% - 40px));
+    height: min(820px, calc(100% - 40px));
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    color: #fff;
+  }
+
+  .gallery-dialog::backdrop {
+    background: rgba(3,6,4,.94);
+    backdrop-filter: blur(8px);
+  }
+
+  .gallery-dialog figure {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    display: grid;
+    grid-template-rows: minmax(0,1fr) auto;
+  }
+
+  .gallery-dialog figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .gallery-dialog figcaption {
+    min-height: 52px;
+    padding: 14px 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    color: rgba(255,255,255,.74);
+    font-size: .82rem;
+  }
+
+  .gallery-close,
+  .gallery-previous,
+  .gallery-next {
+    position: fixed;
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.2);
+    border-radius: 999px;
+    background: rgba(12,16,13,.7);
+    color: #fff;
+    font-size: 2rem;
+    cursor: pointer;
+  }
+
+  .gallery-close { top: 22px; right: 22px; }
+  .gallery-previous { top: 50%; left: 22px; transform: translateY(-50%); }
+  .gallery-next { top: 50%; right: 22px; transform: translateY(-50%); }
+
+  .mobile-inquiry-bar {
+    display: none;
+  }
+
+  @media (max-width: 960px) {
+    .detail-layout {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    .detail-layout aside {
+      position: static;
+      grid-row: auto;
+      margin-top: 12px;
+    }
+
+    .mobile-inquiry-bar {
+      position: fixed;
+      z-index: 30;
+      right: 12px;
+      bottom: 12px;
+      left: 12px;
+      min-height: 64px;
+      padding: 10px 12px 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 14px;
+      background: rgba(14,21,16,.96);
+      color: #fff;
+      box-shadow: 0 16px 45px rgba(0,0,0,.3);
+      backdrop-filter: blur(14px);
+    }
+
+    .mobile-inquiry-bar span {
+      display: grid;
+    }
+
+    .mobile-inquiry-bar small {
+      color: rgba(255,255,255,.58);
+      font-size: .62rem;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+
+    .mobile-inquiry-bar b {
+      padding: 11px 15px;
+      border-radius: 9px;
+      background: var(--accent);
+      font-size: .78rem;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .detail-wide {
+      width: min(100% - 24px, 620px);
+    }
+
+    .detail-hero {
+      min-height: 450px;
+    }
+
+    .hero-inner {
+      padding-bottom: 68px;
+    }
+
+    .hero-inner .back {
+      margin-bottom: 52px;
+    }
+
+    .hero-inner h1 {
+      font-size: clamp(2.75rem, 13vw, 4.3rem);
+    }
+
+    .gallery-shell {
+      margin-top: -36px;
+    }
+
+    .gallery-mosaic {
+      height: auto;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      grid-template-rows: 265px 105px;
+      gap: 5px;
+      border-width: 5px;
+      border-radius: 16px;
+    }
+
+    .gallery-primary {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+
+    .gallery-secondary {
+      min-height: 105px;
+    }
+
+    .view-gallery {
+      right: 10px;
+      bottom: 10px;
+      padding: 8px 10px;
+      font-size: .68rem;
+    }
+
+    .detail-nav {
+      margin-top: 18px;
+    }
+
+    .detail-nav > div {
+      gap: 24px;
+    }
+
+    .detail-layout {
+      padding-top: 30px;
+      padding-bottom: 110px;
+    }
+
+    .overview-card,
+    .content-section {
+      margin-bottom: 14px;
+      padding: 24px 20px;
+      border-radius: 14px;
+    }
+
+    .overview-card .highlights {
+      padding: 18px;
+      grid-template-columns: 1fr;
+    }
+
+    .overview-card .facts {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .content-section h2 {
+      font-size: clamp(2rem, 10vw, 2.7rem);
+    }
+
+    .gallery-dialog {
+      width: calc(100% - 20px);
+      height: calc(100% - 90px);
+    }
+
+    .gallery-previous { left: 8px; }
+    .gallery-next { right: 8px; }
+    .gallery-close { top: 12px; right: 12px; }
   }
 </style>

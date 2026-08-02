@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import HuntCard from '../components/HuntCard.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
 import { publicSlug } from '../lib/public-slugs';
 
@@ -27,8 +28,10 @@ const destinationLinks = regions.map((region) => {
 });
 
 const mediaByHunt = new Map<string, (typeof allMedia)[number]>();
+const mediaCountByHunt = new Map<string, number>();
 for (const media of allMedia) {
   if (media.hunt_id && !mediaByHunt.has(media.hunt_id)) mediaByHunt.set(media.hunt_id, media);
+  if (media.hunt_id) mediaCountByHunt.set(media.hunt_id, (mediaCountByHunt.get(media.hunt_id) ?? 0) + 1);
 }
 
 const imageUrl = (huntId: string | null) => {
@@ -98,115 +101,62 @@ const collectionSchema = {
     </div>
   </section>
 
-  <nav class="browse-links container" aria-label="Browse hunts by destination or species">
+  <nav class="browse-links wide-container" aria-label="Browse hunts by destination or species">
     <div><span>Destinations</span>{destinationLinks.map((item) => <a href={item.href}>{item.name}</a>)}</div>
     <div><span>Species</span>{speciesOptions.map((item) => <a href={`/species/${publicSlug(item)}`}>{item}</a>)}</div>
   </nav>
 
-  <section class="catalog container" id="hunts">
+  <section class="catalog wide-container" id="hunts">
     <div class="catalog-heading">
       <div>
         <p class="eyebrow dark">Browse the current collection</p>
         <h2>Guided hunts</h2>
       </div>
-      <p class="result-count" aria-live="polite"><span data-result-count>{allHunts.length}</span> <span data-result-label>{allHunts.length === 1 ? 'hunt' : 'hunts'}</span></p>
+      <div class="catalog-actions">
+        <p class="result-count" aria-live="polite"><span data-result-count>{allHunts.length}</span> <span data-result-label>{allHunts.length === 1 ? 'hunt' : 'hunts'}</span></p>
+        <button class="filter-open" type="button" data-filter-open>Filters <span data-active-count hidden>0</span></button>
+      </div>
     </div>
 
-    <form class="filters" method="get" action="/#hunts">
-      <label>
-        <span>Search</span>
-        <input name="q" type="search" placeholder="Species, region, or outfitter" autocomplete="off" />
-      </label>
-      <label>
-        <span>Country</span>
-        <select name="country">
-          <option value="">All countries</option>
-          {countries.map((item) => <option value={item}>{item}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Species</span>
-        <select name="species">
-          <option value="">All species</option>
-          {speciesOptions.map((item) => <option value={item}>{item}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Region</span>
-        <select name="region">
-          <option value="">All regions</option>
-          {regions.map((item) => <option value={item}>{item}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Trip type</span>
-        <select name="tripType">
-          <option value="">All trip types</option>
-          {tripTypes.map((item) => <option value={item}>{humanize(item)}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Hunting method</span>
-        <select name="method">
-          <option value="">All methods</option>
-          {methods.map((item) => <option value={item}>{item}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>Maximum price</span>
-        <select name="maxPrice">
-          <option value="">Any price</option>
-          <option value="2000">Up to $2,000</option>
-          <option value="4000">Up to $4,000</option>
-          <option value="7000">Up to $7,000</option>
-          <option value="10000">Up to $10,000</option>
-        </select>
-      </label>
-      <label>
-        <span>Hunting days</span>
-        <select name="minDays">
-          <option value="">Any length</option>
-          <option value="2">2 or more days</option>
-          <option value="3">3 or more days</option>
-          <option value="5">5 or more days</option>
-        </select>
-      </label>
-      <button type="submit">Show hunts</button>
-      <button class="clear" type="button" data-clear hidden>Clear</button>
-    </form>
-
-    <div class="hunt-grid">
-        {allHunts.map((hunt) => (
-          <article class="hunt-card" data-listing-id={hunt.listing_id} data-marketplace-source={hunt.source_id}>
-            <a class="card-image" href={`/hunts/${hunt.listing_id}`}>
-              {imageUrl(hunt.id) ? (
-                <img src={imageUrl(hunt.id)!} alt={mediaByHunt.get(hunt.id!)?.alt || hunt.title || ''} loading="lazy" />
-              ) : (
-                <span>No image available</span>
-              )}
-            </a>
-            <div class="card-body">
-              <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
-              <h3><a href={`/hunts/${hunt.listing_id}`}>{hunt.title}</a></h3>
-              <p class="summary">{hunt.summary}</p>
-              <div class="species">
-                {(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}
-              </div>
-              <div class="card-footer">
-                <div>
-                  <small>{hunt.outfitter_name}</small>
-                  <strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong>
-                </div>
-                <a class="details" href={`/hunts/${hunt.listing_id}`}>View hunt</a>
-              </div>
+    <div class="filter-backdrop" data-filter-backdrop></div>
+    <div class="catalog-layout">
+      <aside class="filter-panel" data-filter-panel aria-label="Filter hunts">
+        <form class="filters" method="get" action="/#hunts">
+          <div class="filter-header"><div><p>Refine results</p><strong>Find the right hunt</strong></div><button type="button" data-filter-close aria-label="Close filters">×</button></div>
+          <label class="search-field"><span>Search hunts</span><input name="q" type="search" placeholder="Species, region, or outfitter" autocomplete="off" /></label>
+          <details open>
+            <summary>Destination</summary>
+            <div class="filter-group">
+              <label><span>Country</span><select name="country"><option value="">All countries</option>{countries.map((item) => <option value={item}>{item}</option>)}</select></label>
+              <label><span>Region</span><select name="region"><option value="">All regions</option>{regions.map((item) => <option value={item}>{item}</option>)}</select></label>
             </div>
-          </article>
-        ))}
-    </div>
-    <div class="empty" data-empty hidden>
-      <h3>No hunts match those filters.</h3>
-      <p>Try another species, destination, or search term.</p>
-      <button type="button" data-clear>See all hunts</button>
+          </details>
+          <details open>
+            <summary>Hunting experience</summary>
+            <div class="filter-group">
+              <label><span>Species</span><select name="species"><option value="">All species</option>{speciesOptions.map((item) => <option value={item}>{item}</option>)}</select></label>
+              <label><span>Trip type</span><select name="tripType"><option value="">All trip types</option>{tripTypes.map((item) => <option value={item}>{humanize(item)}</option>)}</select></label>
+              <label><span>Method</span><select name="method"><option value="">All methods</option>{methods.map((item) => <option value={item}>{item}</option>)}</select></label>
+            </div>
+          </details>
+          <details>
+            <summary>Budget and trip length</summary>
+            <div class="filter-group">
+              <label><span>Maximum starting price</span><select name="maxPrice"><option value="">Any price</option><option value="2000">Up to $2,000</option><option value="4000">Up to $4,000</option><option value="7000">Up to $7,000</option><option value="10000">Up to $10,000</option></select></label>
+              <label><span>Minimum hunting days</span><select name="minDays"><option value="">Any length</option><option value="2">2 or more days</option><option value="3">3 or more days</option><option value="5">5 or more days</option></select></label>
+            </div>
+          </details>
+          <div class="filter-footer"><button class="apply-filters" type="submit">Show hunts</button><button class="clear" type="button" data-clear hidden>Clear all</button></div>
+        </form>
+      </aside>
+
+      <div class="results-column">
+        <div class="results-toolbar"><div class="active-filters" data-active-filters></div><p>Prices and availability are confirmed by each outfitter.</p></div>
+        <div class="hunt-grid">
+          {allHunts.map((hunt, index) => <HuntCard hunt={hunt} media={hunt.id ? mediaByHunt.get(hunt.id) : undefined} mediaCount={hunt.id ? mediaCountByHunt.get(hunt.id) : 0} eager={index < 2} />)}
+        </div>
+        <div class="empty" data-empty hidden><h3>No hunts match those filters.</h3><p>Try another species, destination, or search term.</p><button type="button" data-clear>See all hunts</button></div>
+      </div>
     </div>
   </section>
 
@@ -238,6 +188,26 @@ const collectionSchema = {
   const count = document.querySelector<HTMLElement>('[data-result-count]');
   const label = document.querySelector<HTMLElement>('[data-result-label]');
   const empty = document.querySelector<HTMLElement>('[data-empty]');
+  const panel = document.querySelector<HTMLElement>('[data-filter-panel]');
+  const backdrop = document.querySelector<HTMLElement>('[data-filter-backdrop]');
+  const openButton = document.querySelector<HTMLButtonElement>('[data-filter-open]');
+  const closeButton = document.querySelector<HTMLButtonElement>('[data-filter-close]');
+  const activeFilters = document.querySelector<HTMLElement>('[data-active-filters]');
+  const activeCount = document.querySelector<HTMLElement>('[data-active-count]');
+
+  const setPanelOpen = (open: boolean) => {
+    if (panel) panel.dataset.open = open ? 'true' : 'false';
+    if (backdrop) backdrop.dataset.open = open ? 'true' : 'false';
+    if (openButton) openButton.setAttribute('aria-expanded', String(open));
+    document.body.style.overflow = open ? 'hidden' : '';
+  };
+
+  openButton?.addEventListener('click', () => setPanelOpen(true));
+  closeButton?.addEventListener('click', () => setPanelOpen(false));
+  backdrop?.addEventListener('click', () => setPanelOpen(false));
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setPanelOpen(false);
+  });
 
   if (form && dataElement) {
     const records = JSON.parse(dataElement.textContent || '[]') as Array<{
@@ -297,6 +267,31 @@ const collectionSchema = {
       const active = Boolean(query || country || region || species || tripType || method || maxPrice || minDays);
       document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => (button.hidden = !active));
 
+      const selectedControls = [...form.elements].filter((control): control is HTMLInputElement | HTMLSelectElement =>
+        (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) && Boolean(control.name && control.value)
+      );
+      if (activeCount) {
+        activeCount.textContent = String(selectedControls.length);
+        activeCount.hidden = selectedControls.length === 0;
+      }
+      if (activeFilters) {
+        activeFilters.replaceChildren();
+        for (const control of selectedControls) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          const fieldLabel = control.closest('label')?.querySelector('span')?.textContent?.trim();
+          const valueLabel = control instanceof HTMLSelectElement
+            ? control.selectedOptions[0]?.textContent?.trim()
+            : control.value;
+          chip.textContent = `${fieldLabel}: ${valueLabel} ×`;
+          chip.addEventListener('click', () => {
+            control.value = '';
+            apply();
+          });
+          activeFilters.append(chip);
+        }
+      }
+
       const params = new URLSearchParams();
       if (queryInput.value.trim()) params.set('q', queryInput.value.trim());
       if (country) params.set('country', country);
@@ -324,9 +319,10 @@ const collectionSchema = {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       apply();
+      setPanelOpen(false);
     });
-    form.addEventListener('input', apply);
-    form.addEventListener('change', apply);
+    form.addEventListener('input', () => apply());
+    form.addEventListener('change', () => apply());
     document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => {
       button.addEventListener('click', () => {
         form.reset();
@@ -738,6 +734,369 @@ const collectionSchema = {
 
     .outfitter-list {
       margin-top: 42px;
+    }
+  }
+</style>
+
+<style>
+  .wide-container {
+    width: min(1500px, calc(100% - 48px));
+    margin-inline: auto;
+  }
+
+  .catalog {
+    padding-top: 76px;
+  }
+
+  .catalog-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .filter-open {
+    display: none;
+  }
+
+  .catalog-layout {
+    margin-top: 36px;
+    display: grid;
+    grid-template-columns: 286px minmax(0, 1fr);
+    align-items: start;
+    gap: 38px;
+  }
+
+  .filter-panel {
+    min-width: 0;
+  }
+
+  .filters {
+    position: sticky;
+    top: 20px;
+    margin: 0;
+    padding: 0;
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 16px 42px rgba(18, 25, 20, .055);
+  }
+
+  .filter-header {
+    padding: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .filter-header p {
+    margin: 0 0 3px;
+    color: var(--accent-strong);
+    font-size: .66rem;
+    font-weight: 760;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .filter-header strong {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.25rem;
+    font-weight: 500;
+  }
+
+  .filter-header button {
+    display: none;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 1.8rem;
+    cursor: pointer;
+  }
+
+  .filters .search-field {
+    padding: 20px 20px 4px;
+  }
+
+  .filters label {
+    display: grid;
+    gap: 7px;
+  }
+
+  .filters label:first-child {
+    grid-column: auto;
+  }
+
+  .filters label span {
+    color: var(--muted);
+    font-size: .68rem;
+    font-weight: 720;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+  }
+
+  .filters input,
+  .filters select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fafbf8;
+    color: var(--foreground);
+  }
+
+  .filters details {
+    border-bottom: 1px solid var(--border);
+  }
+
+  .filters summary {
+    padding: 17px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-size: .82rem;
+    font-weight: 760;
+    list-style: none;
+  }
+
+  .filters summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .filters summary::after {
+    content: '+';
+    color: var(--accent-strong);
+    font-size: 1.1rem;
+    font-weight: 500;
+  }
+
+  .filters details[open] summary::after {
+    content: '−';
+  }
+
+  .filter-group {
+    padding: 0 20px 20px;
+    display: grid;
+    gap: 14px;
+  }
+
+  .filter-footer {
+    padding: 18px 20px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .filters .apply-filters {
+    min-height: 46px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--dark);
+    color: #fff;
+    font-weight: 730;
+    cursor: pointer;
+  }
+
+  .filters .clear {
+    min-height: 36px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent-strong);
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .results-column {
+    min-width: 0;
+  }
+
+  .results-toolbar {
+    min-height: 32px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .results-toolbar > p {
+    margin: 0;
+    color: var(--muted);
+    font-size: .78rem;
+    white-space: nowrap;
+  }
+
+  .active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .active-filters button {
+    min-height: 30px;
+    padding: 0 10px;
+    border: 1px solid #d6dbd4;
+    border-radius: 999px;
+    background: #fff;
+    color: #4a554d;
+    font-size: .7rem;
+    cursor: pointer;
+  }
+
+  .hunt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+  }
+
+  .filter-backdrop {
+    display: none;
+  }
+
+  @media (max-width: 1180px) {
+    .catalog-layout {
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 26px;
+    }
+
+    .hunt-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .wide-container {
+      width: min(100% - 32px, 760px);
+    }
+
+    .filter-open {
+      min-height: 44px;
+      padding: 0 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--foreground);
+      font-weight: 720;
+      cursor: pointer;
+    }
+
+    .filter-open span {
+      min-width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: .7rem;
+    }
+
+    .catalog-layout {
+      display: block;
+    }
+
+    .filter-panel {
+      position: fixed;
+      z-index: 80;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(430px, 94vw);
+      overflow-y: auto;
+      background: #fff;
+      transform: translateX(105%);
+      transition: transform 260ms cubic-bezier(.2,.7,.2,1);
+    }
+
+    .filter-panel[data-open='true'] {
+      transform: translateX(0);
+    }
+
+    .filter-panel .filters {
+      position: static;
+      min-height: 100%;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .filter-header {
+      position: sticky;
+      z-index: 2;
+      top: 0;
+      background: #fff;
+    }
+
+    .filter-header button {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+    }
+
+    .filter-backdrop {
+      position: fixed;
+      z-index: 70;
+      inset: 0;
+      display: block;
+      background: rgba(6, 10, 7, .58);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 220ms ease;
+    }
+
+    .filter-backdrop[data-open='true'] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .results-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 10px;
+    }
+  }
+
+  @media (max-width: 650px) {
+    .catalog-heading {
+      display: flex;
+      align-items: end;
+    }
+
+    .catalog-heading h2 {
+      font-size: 2.7rem;
+    }
+
+    .catalog-actions {
+      align-items: flex-end;
+      flex-direction: column-reverse;
+      gap: 9px;
+    }
+
+    .result-count {
+      margin: 0;
+      font-size: .78rem;
+    }
+
+    .browse-links {
+      display: block;
+    }
+
+    .browse-links div {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .browse-links div + div {
+      padding-top: 18px;
     }
   }
 </style>

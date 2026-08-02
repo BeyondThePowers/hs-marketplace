@@ -222,6 +222,32 @@ withdrawal fails closed.
   only through explicit contract fields and reliable source or
   marketplace-owned systems.
 
+## Marketplace interface architecture on 2026-08-01
+
+- The initial compact filter grid was replaced after visual review. Desktop
+  discovery now uses a persistent grouped filter sidebar, while smaller screens
+  use the same semantic form in an off-canvas drawer with a backdrop, close
+  control, active-filter count, and Escape-key handling.
+- Filter groups separate destination, hunting experience, and budget or trip
+  length. Selected values appear as removable chips above the results. The
+  static browser index remains the only data source for filtering.
+- Catalog results use two decision-oriented columns on wide screens rather
+  than three compressed promotional cards. Cards now show media count,
+  location, outfitter, starting price, season, duration, guiding, method, and
+  species without requiring a detail-page visit.
+- Hunt detail pages use a 1,400-pixel maximum canvas with a broad reading
+  column and a dedicated inquiry column. A media mosaic and native dialog
+  gallery appear before the semantic content, followed by an anchored section
+  navigation bar.
+- Hunt sections are visually grouped as deliberate decision panels instead of
+  a continuous sequence of equally weighted divider rows. Mobile places the
+  reading content before the full inquiry form and provides a compact fixed
+  availability action.
+- The redesign retains static HTML, source-owned inquiry routing, canonical
+  data, structured metadata, and participation filtering. Visual behavior was
+  tested at 1,440 and 390 CSS pixels against the live 11-hunt development
+  catalog.
+
 Completed since this plan was written:
 
 - Source-owned inquiry endpoints are live for JJ and ABH, and controlled

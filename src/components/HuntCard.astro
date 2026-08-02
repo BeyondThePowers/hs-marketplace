@@ -4,48 +4,92 @@ import { mediaUrl, type CatalogHunt, type CatalogHuntMedia } from '../lib/catalo
 interface Props {
   hunt: CatalogHunt;
   media?: CatalogHuntMedia;
+  mediaCount?: number;
+  eager?: boolean;
 }
 
-const { hunt, media } = Astro.props;
+const { hunt, media, mediaCount = 1, eager = false } = Astro.props;
 const image = mediaUrl(media);
+const record = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+const duration = record(hunt.duration_and_party ?? hunt.duration);
+const season = record(hunt.season_and_availability ?? hunt.season);
+const guiding = record(hunt.methods_and_guiding);
+const classification = record(hunt.classification);
+const methods = Array.isArray(classification?.methods)
+  ? classification.methods.map((item) => record(item)).filter(Boolean).map((item) => String(item?.name ?? item?.key ?? '')).filter(Boolean)
+  : [];
 const price = hunt.starting_price === null
   ? 'Contact for price'
-  : `From ${new Intl.NumberFormat('en-US', {
+  : new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: hunt.currency || 'USD',
       maximumFractionDigits: 0,
-    }).format(hunt.starting_price)}`;
+    }).format(hunt.starting_price);
+const durationLabel = duration
+  ? `${duration.huntingDays ?? ''} hunting ${Number(duration.huntingDays) === 1 ? 'day' : 'days'}${duration.nights !== undefined ? `, ${duration.nights} nights` : ''}`
+  : 'Ask outfitter';
+const tripType = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
 ---
 
 <article class="hunt-card" data-listing-id={hunt.listing_id} data-marketplace-source={hunt.source_id}>
-  <a class="card-image" href={`/hunts/${hunt.listing_id}`}>
-    {image ? <img src={image} alt={media?.alt || hunt.title || ''} loading="lazy" /> : <span>No image available</span>}
+  <a class="card-image" href={`/hunts/${hunt.listing_id}`} aria-label={`View ${hunt.title}`}>
+    {image ? <img src={image} alt={media?.alt || hunt.title || ''} loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : 'auto'} decoding="async" /> : <span>No image available</span>}
+    <span class="image-shade"></span>
+    <span class="trip-type">{tripType}</span>
+    {mediaCount > 1 && <span class="photo-count" aria-label={`${mediaCount} photos`}>▣ {mediaCount}</span>}
+    <span class="image-location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</span>
   </a>
   <div class="card-body">
-    <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
-    <h3><a href={`/hunts/${hunt.listing_id}`}>{hunt.title}</a></h3>
+    <div class="card-heading">
+      <div>
+        <p class="outfitter">{hunt.outfitter_name}</p>
+        <h3><a href={`/hunts/${hunt.listing_id}`}>{hunt.title}</a></h3>
+      </div>
+      <div class="price"><span>From</span><strong>{price}</strong></div>
+    </div>
     <p class="summary">{hunt.summary}</p>
-    <div class="species">{(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}</div>
-    <div class="card-footer">
-      <div><small>{hunt.outfitter_name}</small><strong>{price}</strong></div>
-      <a class="details" href={`/hunts/${hunt.listing_id}`}>View hunt</a>
+    <dl class="quick-facts">
+      <div><dt>Season</dt><dd>{String(season?.display ?? 'Ask outfitter')}</dd></div>
+      <div><dt>Duration</dt><dd>{durationLabel}</dd></div>
+      <div><dt>Guiding</dt><dd>{String(guiding?.arrangement ?? 'Guided').replaceAll('-', ' ')}</dd></div>
+      <div><dt>Method</dt><dd>{methods.slice(0, 2).join(', ') || 'See hunt details'}</dd></div>
+    </dl>
+    <div class="card-bottom">
+      <div class="species">{(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}</div>
+      <a class="details" href={`/hunts/${hunt.listing_id}`}>View hunt <span aria-hidden="true">›</span></a>
     </div>
   </div>
 </article>
 
 <style>
-  .hunt-card { overflow: hidden; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 14px 35px rgba(19, 31, 22, 0.06); }
-  .card-image { aspect-ratio: 4 / 3; overflow: hidden; display: grid; place-items: center; background: #dce1da; color: var(--muted); }
-  .card-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 280ms ease; }
-  .hunt-card:hover .card-image img { transform: scale(1.025); }
-  .card-body { padding: 22px; display: flex; flex: 1; flex-direction: column; }
-  .location { margin: 0 0 8px; color: var(--accent); font-size: 0.75rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
-  h3 { margin: 0 0 12px; font-family: Georgia, 'Times New Roman', serif; font-size: 1.62rem; font-weight: 500; line-height: 1.1; }
-  .summary { display: -webkit-box; overflow: hidden; margin: 0 0 18px; color: var(--muted); font-size: 0.92rem; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-  .species { margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 7px; }
-  .species span { padding: 6px 9px; border-radius: 999px; background: #f0f1ec; color: #566057; font-size: 0.72rem; }
-  .card-footer { margin-top: auto; padding-top: 18px; display: flex; align-items: end; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); }
-  .card-footer div { display: grid; gap: 5px; }
-  .card-footer small { color: var(--muted); }
-  .details { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--dark); color: #fff; font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+  .hunt-card { overflow: hidden; display: flex; flex-direction: column; min-width: 0; border: 1px solid #d8ddd7; border-radius: 18px; background: #fff; box-shadow: 0 18px 50px rgba(18,25,20,.07); transition: transform 220ms ease, box-shadow 220ms ease; }
+  .hunt-card:hover { transform: translateY(-3px); box-shadow: 0 24px 60px rgba(18,25,20,.12); }
+  .card-image { position: relative; aspect-ratio: 16 / 10; overflow: hidden; display: grid; place-items: center; background: #dce1da; color: var(--muted); }
+  .card-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 500ms cubic-bezier(.2,.7,.2,1); }
+  .hunt-card:hover .card-image img { transform: scale(1.035); }
+  .image-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,12,8,.18), transparent 42%, rgba(7,12,8,.72)); }
+  .trip-type, .photo-count { position: absolute; top: 16px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.24); background: rgba(7,12,8,.62); color: #fff; font-size: .66rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: blur(10px); }
+  .trip-type { left: 16px; }
+  .photo-count { right: 16px; }
+  .image-location { position: absolute; right: 18px; bottom: 16px; left: 18px; color: #fff; font-size: .68rem; font-weight: 740; letter-spacing: .09em; text-transform: uppercase; }
+  .card-body { padding: 24px; display: flex; flex: 1; flex-direction: column; }
+  .card-heading { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 20px; align-items: start; }
+  .outfitter { margin: 0 0 7px; color: var(--accent-strong); font-size: .7rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
+  h3 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(1.45rem,2.1vw,1.85rem); font-weight: 500; line-height: 1.08; letter-spacing: -.025em; }
+  .price { display: grid; justify-items: end; white-space: nowrap; }
+  .price span { color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+  .price strong { font-size: 1.08rem; }
+  .summary { display: -webkit-box; overflow: hidden; margin: 16px 0 20px; color: var(--muted); font-size: .9rem; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .quick-facts { margin: 0 0 20px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 1px solid var(--border); }
+  .quick-facts div { padding: 12px 10px 10px 0; border-bottom: 1px solid var(--border); }
+  .quick-facts div:nth-child(even) { padding-left: 12px; border-left: 1px solid var(--border); }
+  .quick-facts dt { margin-bottom: 3px; color: var(--muted); font-size: .64rem; font-weight: 730; letter-spacing: .07em; text-transform: uppercase; }
+  .quick-facts dd { overflow: hidden; margin: 0; color: #2f3932; font-size: .78rem; font-weight: 650; line-height: 1.35; text-transform: capitalize; text-overflow: ellipsis; white-space: nowrap; }
+  .card-bottom { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+  .species { display: flex; flex-wrap: wrap; gap: 6px; }
+  .species span { padding: 5px 8px; border-radius: 999px; background: #f0f1ec; color: #566057; font-size: .67rem; }
+  .details { flex: 0 0 auto; min-height: 40px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; background: var(--dark); color: #fff; font-size: .78rem; font-weight: 720; }
+  .details span { color: #e6bd7d; font-size: 1.1rem; }
+  @media (max-width: 520px) { .card-body { padding: 20px; } .card-heading { grid-template-columns: 1fr; gap: 12px; } .price { justify-items: start; grid-auto-flow: column; justify-content: start; align-items: baseline; gap: 6px; } }
 </style>
