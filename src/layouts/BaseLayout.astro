@@ -36,6 +36,7 @@ const canonicalUrl = new URL(canonicalPath, Astro.site ?? Astro.url.origin).toSt
     {structuredData && <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />}
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="site-header">
       <a class="brand" href="/" aria-label="HuntSeeker marketplace home">
         <span class="brand-mark">HS</span>
@@ -46,7 +47,7 @@ const canonicalUrl = new URL(canonicalPath, Astro.site ?? Astro.url.origin).toSt
         <a href="/#outfitters">Outfitters</a>
       </nav>
     </header>
-    <main class="page-shell"><slot /></main>
+    <main class="page-shell" id="main-content"><slot /></main>
     <footer class="site-footer">
       <div class="container footer-inner">
         <div>

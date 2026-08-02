@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
+import { publicSlug } from '../lib/public-slugs';
 
 export const prerender = true;
 
@@ -11,6 +12,19 @@ const outfitters = catalog.outfitters;
 
 const countries = [...new Set(allHunts.map((hunt) => hunt.country).filter(Boolean))].sort();
 const speciesOptions = [...new Set(allHunts.flatMap((hunt) => hunt.primary_species ?? []))].sort();
+const regions = [...new Set(allHunts.map((hunt) => hunt.region).filter(Boolean))].sort();
+const tripTypes = [...new Set(allHunts.map((hunt) => hunt.trip_type).filter(Boolean))].sort();
+const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+const records = (value: unknown): Array<Record<string, unknown>> => Array.isArray(value) ? value.filter((item) => record(item)).map((item) => item as Record<string, unknown>) : [];
+const humanize = (value: unknown) => String(value ?? '').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const huntMethods = (hunt: (typeof allHunts)[number]) => records(record(hunt.classification)?.methods)
+  .map((method) => String(method.name ?? method.key ?? ''))
+  .filter(Boolean);
+const methods = [...new Set(allHunts.flatMap(huntMethods))].sort();
+const destinationLinks = regions.map((region) => {
+  const country = allHunts.find((hunt) => hunt.region === region)?.country ?? '';
+  return { name: region, country, href: `/destinations/${publicSlug(`${region}-${country}`)}` };
+});
 
 const mediaByHunt = new Map<string, (typeof allMedia)[number]>();
 for (const media of allMedia) {
@@ -36,12 +50,17 @@ const featuredImage = imageUrl(allHunts[0]?.id ?? null);
 const searchData = allHunts.map((hunt) => ({
   id: hunt.listing_id,
   sourceId: hunt.source_id,
-  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? [])]
+  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? []), ...huntMethods(hunt)]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase(),
   country: hunt.country ?? '',
-  species: hunt.primary_species ?? [],
+  region: hunt.region ?? '',
+  species: [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])],
+  tripType: hunt.trip_type ?? '',
+  methods: huntMethods(hunt),
+  price: hunt.starting_price,
+  huntingDays: Number(record(hunt.duration_and_party ?? hunt.duration)?.huntingDays ?? 0),
 }));
 const collectionSchema = {
   '@context': 'https://schema.org',
@@ -79,6 +98,11 @@ const collectionSchema = {
     </div>
   </section>
 
+  <nav class="browse-links container" aria-label="Browse hunts by destination or species">
+    <div><span>Destinations</span>{destinationLinks.map((item) => <a href={item.href}>{item.name}</a>)}</div>
+    <div><span>Species</span>{speciesOptions.map((item) => <a href={`/species/${publicSlug(item)}`}>{item}</a>)}</div>
+  </nav>
+
   <section class="catalog container" id="hunts">
     <div class="catalog-heading">
       <div>
@@ -105,6 +129,46 @@ const collectionSchema = {
         <select name="species">
           <option value="">All species</option>
           {speciesOptions.map((item) => <option value={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Region</span>
+        <select name="region">
+          <option value="">All regions</option>
+          {regions.map((item) => <option value={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Trip type</span>
+        <select name="tripType">
+          <option value="">All trip types</option>
+          {tripTypes.map((item) => <option value={item}>{humanize(item)}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Hunting method</span>
+        <select name="method">
+          <option value="">All methods</option>
+          {methods.map((item) => <option value={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Maximum price</span>
+        <select name="maxPrice">
+          <option value="">Any price</option>
+          <option value="2000">Up to $2,000</option>
+          <option value="4000">Up to $4,000</option>
+          <option value="7000">Up to $7,000</option>
+          <option value="10000">Up to $10,000</option>
+        </select>
+      </label>
+      <label>
+        <span>Hunting days</span>
+        <select name="minDays">
+          <option value="">Any length</option>
+          <option value="2">2 or more days</option>
+          <option value="3">3 or more days</option>
+          <option value="5">5 or more days</option>
         </select>
       </label>
       <button type="submit">Show hunts</button>
@@ -181,17 +245,32 @@ const collectionSchema = {
       sourceId: string;
       search: string;
       country: string;
+      region: string;
       species: string[];
+      tripType: string;
+      methods: string[];
+      price: number | null;
+      huntingDays: number;
     }>;
     const queryInput = form.elements.namedItem('q') as HTMLInputElement;
     const countryInput = form.elements.namedItem('country') as HTMLSelectElement;
     const speciesInput = form.elements.namedItem('species') as HTMLSelectElement;
+    const regionInput = form.elements.namedItem('region') as HTMLSelectElement;
+    const tripTypeInput = form.elements.namedItem('tripType') as HTMLSelectElement;
+    const methodInput = form.elements.namedItem('method') as HTMLSelectElement;
+    const maxPriceInput = form.elements.namedItem('maxPrice') as HTMLSelectElement;
+    const minDaysInput = form.elements.namedItem('minDays') as HTMLSelectElement;
     const inactiveSources = (window as Window & { __MARKETPLACE_INACTIVE_SOURCES__?: string[] }).__MARKETPLACE_INACTIVE_SOURCES__ ?? [];
 
-    const apply = () => {
+    const apply = (updateUrl = true) => {
       const query = queryInput.value.trim().toLocaleLowerCase();
       const country = countryInput.value;
       const species = speciesInput.value;
+      const region = regionInput.value;
+      const tripType = tripTypeInput.value;
+      const method = methodInput.value;
+      const maxPrice = Number(maxPriceInput.value || 0);
+      const minDays = Number(minDaysInput.value || 0);
       let visible = 0;
 
       for (const record of records) {
@@ -199,7 +278,12 @@ const collectionSchema = {
           !inactiveSources.includes(record.sourceId) &&
           (!query || record.search.includes(query)) &&
           (!country || record.country === country) &&
-          (!species || record.species.includes(species));
+          (!region || record.region === region) &&
+          (!species || record.species.includes(species)) &&
+          (!tripType || record.tripType === tripType) &&
+          (!method || record.methods.includes(method)) &&
+          (!maxPrice || (record.price !== null && record.price <= maxPrice)) &&
+          (!minDays || record.huntingDays >= minDays);
         const card = cards.get(record.id);
         if (card) {
           card.hidden = !matches;
@@ -210,21 +294,33 @@ const collectionSchema = {
       if (count) count.textContent = String(visible);
       if (label) label.textContent = visible === 1 ? 'hunt' : 'hunts';
       if (empty) empty.hidden = visible !== 0;
-      const active = Boolean(query || country || species);
+      const active = Boolean(query || country || region || species || tripType || method || maxPrice || minDays);
       document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => (button.hidden = !active));
 
       const params = new URLSearchParams();
       if (queryInput.value.trim()) params.set('q', queryInput.value.trim());
       if (country) params.set('country', country);
       if (species) params.set('species', species);
-      const nextUrl = `${window.location.pathname}${params.size ? `?${params}` : ''}#hunts`;
-      history.replaceState(null, '', nextUrl);
+      if (region) params.set('region', region);
+      if (tripType) params.set('tripType', tripType);
+      if (method) params.set('method', method);
+      if (maxPrice) params.set('maxPrice', String(maxPrice));
+      if (minDays) params.set('minDays', String(minDays));
+      if (updateUrl) {
+        const nextUrl = `${window.location.pathname}${params.size ? `?${params}` : ''}#hunts`;
+        history.replaceState(null, '', nextUrl);
+      }
     };
 
     const initial = new URLSearchParams(window.location.search);
     queryInput.value = initial.get('q') ?? '';
     countryInput.value = initial.get('country') ?? '';
     speciesInput.value = initial.get('species') ?? '';
+    regionInput.value = initial.get('region') ?? '';
+    tripTypeInput.value = initial.get('tripType') ?? '';
+    methodInput.value = initial.get('method') ?? '';
+    maxPriceInput.value = initial.get('maxPrice') ?? '';
+    minDaysInput.value = initial.get('minDays') ?? '';
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       apply();
@@ -237,7 +333,7 @@ const collectionSchema = {
         apply();
       });
     });
-    apply();
+    apply(false);
   }
 </script>
 
@@ -326,6 +422,38 @@ const collectionSchema = {
     padding-bottom: 110px;
   }
 
+  .browse-links {
+    padding-top: 34px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .browse-links div {
+    padding-bottom: 22px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .browse-links span {
+    width: 100%;
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 750;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .browse-links a {
+    padding: 7px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    font-size: .82rem;
+  }
+
   .catalog-heading {
     display: flex;
     align-items: end;
@@ -348,12 +476,20 @@ const collectionSchema = {
     margin: 36px 0 42px;
     padding: 18px;
     display: grid;
-    grid-template-columns: minmax(240px, 1.5fr) 1fr 1fr auto auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: end;
     gap: 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
+  }
+
+  .filters label:first-child {
+    grid-column: span 2;
+  }
+
+  .filters > button[type='submit'] {
+    align-self: stretch;
   }
 
   .filters label {
@@ -578,8 +714,13 @@ const collectionSchema = {
     }
 
     .catalog-heading,
-    .outfitters-inner {
+    .outfitters-inner,
+    .browse-links {
       display: block;
+    }
+
+    .browse-links div + div {
+      padding-top: 22px;
     }
 
     .result-count {
@@ -589,6 +730,10 @@ const collectionSchema = {
     .filters,
     .hunt-grid {
       grid-template-columns: 1fr;
+    }
+
+    .filters label:first-child {
+      grid-column: auto;
     }
 
     .outfitter-list {

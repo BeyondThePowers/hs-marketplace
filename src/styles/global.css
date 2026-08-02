@@ -41,6 +41,35 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 3px solid #e6bd7d;
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.skip-link:focus {
+  top: 12px;
+  left: 12px;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--foreground);
+  clip-path: none;
+  font-weight: 700;
+}
+
 .page-shell {
   min-height: 100vh;
 }
@@ -125,5 +154,16 @@ a {
   .footer-inner {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

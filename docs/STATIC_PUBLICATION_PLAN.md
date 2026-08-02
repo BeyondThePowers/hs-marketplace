@@ -1,6 +1,6 @@
 # Marketplace static publication implementation plan
 
-Status: Core static catalog and revision-driven deployment automation implemented
+Status: Core static catalog, revision-driven deployment automation, and semantic discovery implemented
 
 Last reviewed: 2026-08-01
 
@@ -85,8 +85,10 @@ the sharded static index slower or heavier than a remote query.
 - The marketplace pre-renders the discovery page, 11 hunt pages, and 2
   outfitter pages from one memoized snapshot per build. Lodge pages are
   generated only when a source explicitly enables one.
-- `/catalog-index.json` is static, contains only compact discovery facts, and
-  identifies its content with a stable SHA-256 revision.
+- `/catalog-index.json` is static, contains the public decision model for
+  answer engines and downstream consumers, and identifies its content with a
+  stable SHA-256 revision. The smaller browser search payload remains embedded
+  separately in the catalog HTML.
 - Discovery filters run in the browser over HTML that already contains every
   hunt card. Filter state is preserved in shareable URL parameters.
 - Hunt, lodge, outfitter, and collection pages emit canonical metadata and
@@ -95,9 +97,10 @@ the sharded static index slower or heavier than a remote query.
 - `/health.json`, protected source diagnostics, reconciliation, and webhooks
   remain dynamic operational routes.
 
-The remaining essential work is the complete hunt renderer, the participation
-guard, curated taxonomy landing pages, and measured performance and
-accessibility testing.
+The semantic hunt renderer, participation guard, destination pages, and
+species pages are now implemented. The remaining essential work is measured
+mobile, accessibility, and performance testing, followed by method and trip
+type landing pages when the catalog is broad enough to make them useful.
 
 ### 1. Lock the public contract
 
@@ -194,6 +197,30 @@ withdrawal fails closed.
 3. Add a fast source participation guard and test pause and withdrawal.
 4. Add static destination, species, method, and category landing pages.
 5. Run mobile, accessibility, answer-engine, and performance measurements.
+
+## Discovery and hunt page implementation on 2026-08-01
+
+- Hunt pages now render structured methods and guiding, season and availability,
+  all price options, deposits and payment timing, accommodation, travel,
+  equipment and licenses, territory when supplied, inclusions, exclusions,
+  optional services, itinerary, terms, media, and related hunts.
+- The generated discovery index exposes the same normalized decision fields as
+  the HTML pages. This is a public static artifact and does not query source
+  feeds or Supabase at request time.
+- Catalog filtering now covers search, country, region, primary or secondary
+  species, trip type, hunting method, maximum starting price, and minimum
+  hunting days. Filter state remains shareable in the URL.
+- Region and species landing pages are generated from the accepted catalog
+  snapshot. They have canonical metadata, JSON-LD item lists, sitemap entries,
+  and direct links from the marketplace and hunt pages.
+- `/llms.txt` points answer engines to the structured public catalog, sitemap,
+  taxonomy pages, and every current hunt. Hunt pages provide Product and
+  BreadcrumbList JSON-LD with seller, area, species, duration, season, guiding,
+  and offer facts.
+- Reviews, success rates, live inventory, precise territory maps, and booking
+  transactions are not inferred from marketing prose. They should be added
+  only through explicit contract fields and reliable source or
+  marketplace-owned systems.
 
 Completed since this plan was written:
 

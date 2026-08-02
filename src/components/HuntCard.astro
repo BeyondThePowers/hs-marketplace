@@ -1,0 +1,51 @@
+---
+import { mediaUrl, type CatalogHunt, type CatalogHuntMedia } from '../lib/catalog-build';
+
+interface Props {
+  hunt: CatalogHunt;
+  media?: CatalogHuntMedia;
+}
+
+const { hunt, media } = Astro.props;
+const image = mediaUrl(media);
+const price = hunt.starting_price === null
+  ? 'Contact for price'
+  : `From ${new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: hunt.currency || 'USD',
+      maximumFractionDigits: 0,
+    }).format(hunt.starting_price)}`;
+---
+
+<article class="hunt-card" data-listing-id={hunt.listing_id} data-marketplace-source={hunt.source_id}>
+  <a class="card-image" href={`/hunts/${hunt.listing_id}`}>
+    {image ? <img src={image} alt={media?.alt || hunt.title || ''} loading="lazy" /> : <span>No image available</span>}
+  </a>
+  <div class="card-body">
+    <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+    <h3><a href={`/hunts/${hunt.listing_id}`}>{hunt.title}</a></h3>
+    <p class="summary">{hunt.summary}</p>
+    <div class="species">{(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}</div>
+    <div class="card-footer">
+      <div><small>{hunt.outfitter_name}</small><strong>{price}</strong></div>
+      <a class="details" href={`/hunts/${hunt.listing_id}`}>View hunt</a>
+    </div>
+  </div>
+</article>
+
+<style>
+  .hunt-card { overflow: hidden; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 14px 35px rgba(19, 31, 22, 0.06); }
+  .card-image { aspect-ratio: 4 / 3; overflow: hidden; display: grid; place-items: center; background: #dce1da; color: var(--muted); }
+  .card-image img { width: 100%; height: 100%; object-fit: cover; transition: transform 280ms ease; }
+  .hunt-card:hover .card-image img { transform: scale(1.025); }
+  .card-body { padding: 22px; display: flex; flex: 1; flex-direction: column; }
+  .location { margin: 0 0 8px; color: var(--accent); font-size: 0.75rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+  h3 { margin: 0 0 12px; font-family: Georgia, 'Times New Roman', serif; font-size: 1.62rem; font-weight: 500; line-height: 1.1; }
+  .summary { display: -webkit-box; overflow: hidden; margin: 0 0 18px; color: var(--muted); font-size: 0.92rem; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+  .species { margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 7px; }
+  .species span { padding: 6px 9px; border-radius: 999px; background: #f0f1ec; color: #566057; font-size: 0.72rem; }
+  .card-footer { margin-top: auto; padding-top: 18px; display: flex; align-items: end; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); }
+  .card-footer div { display: grid; gap: 5px; }
+  .card-footer small { color: var(--muted); }
+  .details { min-height: 38px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--dark); color: #fff; font-size: 0.82rem; font-weight: 700; white-space: nowrap; }
+</style>

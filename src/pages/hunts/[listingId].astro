@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+import { publicSlug } from '../../lib/public-slugs';
 
 export const prerender = true;
 
@@ -21,12 +22,36 @@ export async function getStaticPaths() {
             lodge: catalog.lodges.find((lodge) => lodgeIds.has(lodge.id) && lodge.id === relation.lodge_record_id),
             media: catalog.lodgeMedia.filter((item) => item.lodge_record_id === relation.lodge_record_id),
           })),
+          relatedHunts: catalog.hunts
+            .filter((candidate) => candidate.id !== hunt.id && (
+              candidate.region === hunt.region ||
+              candidate.trip_type === hunt.trip_type ||
+              (candidate.primary_species ?? []).some((species) => (hunt.primary_species ?? []).includes(species))
+            ))
+            .sort((a, b) => {
+              const score = (candidate: typeof hunt) =>
+                Number(candidate.region === hunt.region) * 3 +
+                Number(candidate.trip_type === hunt.trip_type) * 2 +
+                (candidate.primary_species ?? []).filter((species) => (hunt.primary_species ?? []).includes(species)).length;
+              return score(b) - score(a);
+            })
+            .slice(0, 3)
+            .map((candidate) => ({
+              hunt: candidate,
+              media: catalog.huntMedia.find((item) => item.hunt_id === candidate.id),
+            })),
         },
       };
     });
 }
 
-const { hunt, media, accommodations } = Astro.props;
+const { hunt, media, accommodations, relatedHunts } = Astro.props;
+const record = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+const records = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value) ? value.filter((item) => record(item)).map((item) => item as Record<string, unknown>) : [];
+const strings = (value: unknown): string[] => Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+const humanize = (value: unknown) => String(value ?? '').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const arrangedAccommodations = Array.isArray(hunt.accommodations)
   ? (hunt.accommodations as Array<Record<string, unknown>>).filter((item) => item.type === 'arranged')
   : [];
@@ -42,6 +67,19 @@ const formatPrice = (amount: number | null, currency: string | null) =>
 
 const duration = (hunt.duration_and_party ?? hunt.duration) as Record<string, unknown> | null;
 const season = (hunt.season_and_availability ?? hunt.season) as Record<string, unknown> | null;
+const methodsAndGuiding = record(hunt.methods_and_guiding);
+const pricing = record(hunt.pricing);
+const priceOptions = records(pricing?.options);
+const travel = record(hunt.travel);
+const airports = records(travel?.nearestAirports);
+const equipment = record(hunt.equipment_and_licenses);
+const gunRental = record(equipment?.gunRental);
+const territory = record(hunt.territory);
+const territorySize = record(territory?.size);
+const terms = record(hunt.terms);
+const optionalServices = records(hunt.optional_services);
+const classification = record(hunt.classification);
+const methodTaxonomy = records(classification?.methods).map((item) => String(item.name ?? item.key ?? '')).filter(Boolean);
 const durationLabel = duration
   ? [duration.huntingDays && `${duration.huntingDays} hunting days`, duration.nights !== undefined && `${duration.nights} nights`]
       .filter(Boolean)
@@ -49,10 +87,12 @@ const durationLabel = duration
   : null;
 const seasonLabel = season ? String(season.display ?? season.label ?? season.summary ?? 'Ask outfitter') : null;
 const tripTypeLabel = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
+const structuredSectionTypes = new Set(['overview', 'highlights', 'hunting', 'inclusions', 'exclusions', 'optionalServices', 'itinerary', 'travel', 'equipment', 'terms', 'faq']);
 const sections = (Array.isArray(hunt?.sections) ? hunt.sections : [])
   .map((section) => {
     if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
     const item = section as Record<string, unknown>;
+    if (structuredSectionTypes.has(String(item.type ?? ''))) return null;
     const body = item.body ?? item.content ?? item.description;
     if (!body) return null;
     return {
@@ -78,22 +118,47 @@ const lodgeRegion = (location: unknown) => {
   if (!location || typeof location !== 'object' || Array.isArray(location)) return null;
   return String((location as Record<string, unknown>).region ?? '') || null;
 };
-const huntSchema = {
+const canonicalUrl = new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString();
+const priceBasis = (value: unknown) => ({
+  'per-hunter-per-trip': 'per hunter, per trip',
+  'per-hunter-per-day': 'per hunter, per day',
+  'per-group-per-trip': 'per group, per trip',
+  'daily-rate': 'per day',
+  'starting-from': 'starting price',
+}[String(value)] ?? humanize(value));
+const inquiryAvailability = season?.mode === 'verified-windows' ? 'Verified date windows' : 'Dates confirmed by inquiry';
+const huntSchema = [{
   '@context': 'https://schema.org',
   '@type': 'Product',
+  sku: hunt.listing_id,
   name: hunt.title,
   description: hunt.summary,
   image: media.map((item) => mediaUrl(item)).filter(Boolean),
-  url: new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString(),
-  brand: { '@type': 'Organization', name: hunt.outfitter_name },
+  url: canonicalUrl,
+  category: tripTypeLabel,
+  seller: { '@type': 'Organization', name: hunt.outfitter_name, url: hunt.outfitter_profile_url },
+  areaServed: { '@type': 'Place', name: [hunt.region, hunt.country].filter(Boolean).join(', ') },
+  additionalProperty: [
+    { '@type': 'PropertyValue', name: 'Primary species', value: (hunt.primary_species ?? []).join(', ') },
+    { '@type': 'PropertyValue', name: 'Duration', value: durationLabel },
+    { '@type': 'PropertyValue', name: 'Season', value: seasonLabel },
+    methodsAndGuiding?.arrangement && { '@type': 'PropertyValue', name: 'Guiding', value: humanize(methodsAndGuiding.arrangement) },
+  ].filter(Boolean),
   offers: hunt.starting_price === null ? undefined : {
     '@type': 'Offer',
     price: hunt.starting_price,
     priceCurrency: hunt.currency || 'USD',
     availability: 'https://schema.org/LimitedAvailability',
-    url: hunt.source_url,
+    url: canonicalUrl,
   },
-};
+}, {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Hunts', item: new URL('/#hunts', Astro.site ?? Astro.url.origin).toString() },
+    { '@type': 'ListItem', position: 2, name: hunt.title, item: canonicalUrl },
+  ],
+}];
 ---
 
 <BaseLayout
@@ -109,7 +174,7 @@ const huntSchema = {
         <div class="shade"></div>
         <div class="container hero-inner">
           <a class="back" href="/#hunts">Back to all hunts</a>
-          <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+          <p class="location"><a href={`/destinations/${publicSlug(`${hunt.region}-${hunt.country}`)}`}>{[hunt.region, hunt.country].filter(Boolean).join(', ')}</a></p>
           <h1>{hunt.title}</h1>
           <p class="outfitter">With {hunt.outfitter_name}</p>
         </div>
@@ -126,11 +191,80 @@ const huntSchema = {
           )}
 
           <div class="facts">
-            <div><span>Species</span><strong>{(hunt.primary_species ?? []).join(', ')}</strong></div>
+            <div><span>Species</span><strong class="inline-links">{(hunt.primary_species ?? []).map((species, index) => <>{index > 0 && ', '}<a href={`/species/${publicSlug(species)}`}>{species}</a></>)}</strong></div>
             {duration && <div><span>Duration</span><strong>{durationLabel}</strong></div>}
             {season && <div><span>Season</span><strong>{seasonLabel}</strong></div>}
             <div><span>Trip type</span><strong>{tripTypeLabel}</strong></div>
+            {methodTaxonomy.length > 0 && <div><span>Hunting methods</span><strong>{methodTaxonomy.join(', ')}</strong></div>}
+            {methodsAndGuiding?.arrangement && <div><span>Guiding</span><strong>{humanize(methodsAndGuiding.arrangement)}</strong></div>}
           </div>
+
+          {methodsAndGuiding && (
+            <section class="content-section">
+              <p class="section-label">In the field</p>
+              <h2>How the hunt is conducted</h2>
+              <dl class="detail-grid">
+                {methodTaxonomy.length > 0 && <div><dt>Methods</dt><dd>{methodTaxonomy.join(', ')}</dd></div>}
+                {methodsAndGuiding.guidingRatio && <div><dt>Guide arrangement</dt><dd>{humanize(methodsAndGuiding.arrangement)} at {String(methodsAndGuiding.guidingRatio)}</dd></div>}
+                {methodsAndGuiding.intensity && <div><dt>Hunt intensity</dt><dd>{humanize(methodsAndGuiding.intensity)}</dd></div>}
+                {methodsAndGuiding.physicalDifficulty && <div><dt>Physical difficulty</dt><dd>{humanize(methodsAndGuiding.physicalDifficulty)}</dd></div>}
+                {methodsAndGuiding.mobilityNotes && <div class="wide"><dt>Mobility</dt><dd>{String(methodsAndGuiding.mobilityNotes)}</dd></div>}
+                {(hunt.secondary_species ?? []).length > 0 && <div class="wide"><dt>Additional species</dt><dd>{hunt.secondary_species.join(', ')}</dd></div>}
+              </dl>
+            </section>
+          )}
+
+          {season && (
+            <section class="content-section">
+              <p class="section-label">Timing</p>
+              <h2>Season and availability</h2>
+              <dl class="detail-grid">
+                <div><dt>Hunting season</dt><dd>{seasonLabel}</dd></div>
+                <div><dt>Availability</dt><dd>{inquiryAvailability}</dd></div>
+                {season.peak && <div><dt>Peak period</dt><dd>{String(season.peak)}</dd></div>}
+                {season.lastVerifiedAt && <div><dt>Last verified</dt><dd>{new Date(String(season.lastVerifiedAt)).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</dd></div>}
+              </dl>
+              {records(season.windows).length > 0 && (
+                <div class="date-windows">
+                  {records(season.windows).map((window) => (
+                    <div><strong>{String(window.start)}</strong><span>to {String(window.end)}</span><small>{humanize(window.status)}</small></div>
+                  ))}
+                </div>
+              )}
+              <p class="confirmation-note">Dates and availability are published by the outfitter and should be confirmed when you inquire.</p>
+            </section>
+          )}
+
+          {priceOptions.length > 0 && (
+            <section class="content-section">
+              <p class="section-label">Package rates</p>
+              <h2>Pricing options</h2>
+              <div class="price-options">
+                {priceOptions.map((option) => (
+                  <article>
+                    <div><h3>{String(option.label)}</h3><p>{priceBasis(option.basis)}</p></div>
+                    <strong>{formatPrice(Number(option.amount), String(option.currency ?? hunt.currency))}</strong>
+                    {(option.includedHunters || option.includedGuests || option.includedHuntingDays) && (
+                      <p class="option-details">{[
+                        option.includedHunters && `${option.includedHunters} hunters`,
+                        option.includedGuests && `${option.includedGuests} guests`,
+                        option.includedHuntingDays && `${option.includedHuntingDays} hunting days`,
+                      ].filter(Boolean).join(', ')}</p>
+                    )}
+                    {option.notes && <p class="option-details">{String(option.notes)}</p>}
+                  </article>
+                ))}
+              </div>
+              {(pricing?.depositAmount !== undefined || pricing?.depositPercentage !== undefined || pricing?.finalPaymentDueDays !== undefined || strings(pricing?.paymentMethods).length > 0) && (
+                <dl class="detail-grid payment-details">
+                  {pricing?.depositAmount !== undefined && <div><dt>Deposit</dt><dd>{formatPrice(Number(pricing.depositAmount), hunt.currency)}</dd></div>}
+                  {pricing?.depositPercentage !== undefined && <div><dt>Deposit</dt><dd>{String(pricing.depositPercentage)}%</dd></div>}
+                  {pricing?.finalPaymentDueDays !== undefined && <div><dt>Final payment</dt><dd>{String(pricing.finalPaymentDueDays)} days before arrival</dd></div>}
+                  {strings(pricing?.paymentMethods).length > 0 && <div><dt>Payment methods</dt><dd>{strings(pricing?.paymentMethods).join(', ')}</dd></div>}
+                </dl>
+              )}
+            </section>
+          )}
 
           {sections.map((section) => (
               <section class="content-section">
@@ -173,10 +307,68 @@ const huntSchema = {
             </section>
           )}
 
+          {(airports.length > 0 || travel?.transferTime) && (
+            <section class="content-section">
+              <p class="section-label">Getting there</p>
+              <h2>Travel and arrival</h2>
+              <div class="travel-grid">
+                {airports.map((airport) => (
+                  <article><strong>{String(airport.code)}</strong><div><h3>{String(airport.name)}</h3><p>{humanize(airport.type)} airport</p></div></article>
+                ))}
+              </div>
+              {travel?.transferTime && <p class="confirmation-note"><strong>Typical transfer:</strong> {String(travel.transferTime)}</p>}
+            </section>
+          )}
+
+          {equipment && (
+            <section class="content-section">
+              <p class="section-label">Preparation</p>
+              <h2>Equipment and licenses</h2>
+              <dl class="detail-grid">
+                <div><dt>Hunting license</dt><dd>{equipment.licenseRequired ? 'Required' : 'Not required'}</dd></div>
+                {equipment.licenseCost !== undefined && <div><dt>License cost</dt><dd>{formatPrice(Number(equipment.licenseCost), hunt.currency)}</dd></div>}
+                {equipment.licenseArrangement && <div class="wide"><dt>License arrangements</dt><dd>{String(equipment.licenseArrangement)}</dd></div>}
+                {gunRental && <div><dt>Firearm rental</dt><dd>{gunRental.available === false ? 'Not available' : gunRental.cost ? formatPrice(Number(gunRental.cost), String(gunRental.currency ?? hunt.currency)) : 'Available'}</dd></div>}
+                {gunRental && strings(gunRental.gauges).length > 0 && <div><dt>Available options</dt><dd>{strings(gunRental.gauges).join(', ')}</dd></div>}
+                {gunRental?.notes && <div class="wide"><dt>Rental details</dt><dd>{String(gunRental.notes)}</dd></div>}
+              </dl>
+            </section>
+          )}
+
+          {territory && (
+            <section class="content-section">
+              <p class="section-label">Hunting area</p>
+              <h2>Terrain and territory</h2>
+              {territory.summary && <p>{String(territory.summary)}</p>}
+              <dl class="detail-grid">
+                {territorySize && <div><dt>Area</dt><dd>{Number(territorySize.value).toLocaleString('en-US')} {humanize(territorySize.unit)}</dd></div>}
+                {territory.ownership && <div><dt>Land access</dt><dd>{humanize(territory.ownership)}</dd></div>}
+                {territory.fenceStatus && <div><dt>Hunt setting</dt><dd>{humanize(territory.fenceStatus)}</dd></div>}
+                {strings(territory.terrain).length > 0 && <div><dt>Terrain</dt><dd>{strings(territory.terrain).join(', ')}</dd></div>}
+                {territory.elevation && <div><dt>Elevation</dt><dd>{String(territory.elevation)}</dd></div>}
+              </dl>
+            </section>
+          )}
+
           {(inclusions.length > 0 || exclusions.length > 0) && (
             <section class="content-section package-grid">
               {inclusions.length > 0 && <div><h2>Included</h2><ul>{inclusions.map((item) => <li>{item}</li>)}</ul></div>}
               {exclusions.length > 0 && <div><h2>Not included</h2><ul>{exclusions.map((item) => <li>{item}</li>)}</ul></div>}
+            </section>
+          )}
+
+          {optionalServices.length > 0 && (
+            <section class="content-section">
+              <h2>Optional services</h2>
+              <div class="service-list">
+                {optionalServices.map((service) => (
+                  <article>
+                    <div><h3>{String(service.name ?? service.label ?? service.service ?? 'Optional service')}</h3>{service.description && <p>{String(service.description)}</p>}</div>
+                    {service.price !== undefined && <strong>{formatPrice(Number(service.price), String(service.currency ?? hunt.currency))}</strong>}
+                    {service.amount !== undefined && <strong>{formatPrice(Number(service.amount), String(service.currency ?? hunt.currency))}</strong>}
+                  </article>
+                ))}
+              </div>
             </section>
           )}
 
@@ -208,6 +400,17 @@ const huntSchema = {
             </section>
           )}
 
+          {terms && (
+            <section class="content-section">
+              <h2>Booking terms</h2>
+              <div class="faqs">
+                {terms.cancellationPolicy && <details><summary>Cancellation policy</summary><p>{String(terms.cancellationPolicy)}</p></details>}
+                {terms.trophyFeePolicy && <details><summary>Trophy fee policy</summary><p>{String(terms.trophyFeePolicy)}</p></details>}
+                {terms.woundingPolicy && <details><summary>Wounding policy</summary><p>{String(terms.woundingPolicy)}</p></details>}
+              </div>
+            </section>
+          )}
+
           {media.length > 1 && (
             <section class="gallery">
               <h2>From the field</h2>
@@ -218,11 +421,27 @@ const huntSchema = {
               </div>
             </section>
           )}
+
+          {relatedHunts.length > 0 && (
+            <section class="content-section related-section">
+              <p class="section-label">Keep comparing</p>
+              <h2>Related hunts</h2>
+              <div class="related-grid">
+                {relatedHunts.map(({ hunt: related, media: relatedMedia }) => (
+                  <a href={`/hunts/${related.listing_id}`}>
+                    {relatedMedia && <img src={mediaUrl(relatedMedia) || ''} alt={relatedMedia.alt || related.title || ''} loading="lazy" />}
+                    <div><p>{[related.region, related.country].filter(Boolean).join(', ')}</p><h3>{related.title}</h3><strong>{formatPrice(related.starting_price, related.currency)}</strong></div>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
         </article>
 
         <aside>
           <p class="price-label">Starting price</p>
           <p class="price">{formatPrice(hunt.starting_price, hunt.currency)}</p>
+          {priceOptions[0]?.basis && <p class="price-basis">{priceBasis(priceOptions[0].basis)}</p>}
           <p>Confirm dates, availability, and final package terms directly with the outfitter.</p>
           {directInquiry ? (
             <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id}>
@@ -339,6 +558,16 @@ const huntSchema = {
     text-transform: uppercase;
   }
 
+  .location a {
+    color: inherit;
+  }
+
+  .inline-links a {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    text-underline-offset: 3px;
+  }
+
   h1,
   h2,
   p {
@@ -441,6 +670,134 @@ const huntSchema = {
     line-height: 1.7;
   }
 
+  .section-label {
+    margin-bottom: 8px;
+    color: var(--accent-strong) !important;
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.11em;
+    line-height: 1.2 !important;
+    text-transform: uppercase;
+  }
+
+  .detail-grid {
+    margin: 24px 0 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 32px;
+    border-top: 1px solid var(--border);
+  }
+
+  .detail-grid div {
+    padding: 17px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-grid .wide {
+    grid-column: 1 / -1;
+  }
+
+  .detail-grid dt {
+    margin-bottom: 5px;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .detail-grid dd {
+    margin: 0;
+    color: var(--foreground);
+    line-height: 1.55;
+  }
+
+  .confirmation-note {
+    margin: 20px 0 0;
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: #f1eee6;
+    font-size: 0.88rem;
+  }
+
+  .date-windows,
+  .price-options,
+  .service-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .date-windows div,
+  .price-options article,
+  .service-list article {
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .date-windows span,
+  .date-windows small {
+    color: var(--muted);
+  }
+
+  .price-options h3,
+  .service-list h3,
+  .travel-grid h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .price-options p,
+  .service-list p,
+  .travel-grid p {
+    margin: 4px 0 0;
+    font-size: 0.86rem;
+    line-height: 1.5;
+  }
+
+  .price-options > article > strong,
+  .service-list > article > strong {
+    flex: 0 0 auto;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.25rem;
+  }
+
+  .price-options .option-details {
+    max-width: 230px;
+  }
+
+  .payment-details {
+    margin-top: 22px;
+  }
+
+  .travel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .travel-grid article {
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .travel-grid article > strong {
+    min-width: 52px;
+    color: var(--accent-strong);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.35rem;
+  }
+
   .gallery {
     margin-top: 40px;
   }
@@ -534,6 +891,44 @@ const huntSchema = {
     border-radius: 12px;
   }
 
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .related-grid > a {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .related-grid img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+  }
+
+  .related-grid div {
+    padding: 15px;
+  }
+
+  .related-grid p {
+    margin-bottom: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .related-grid h3 {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.18rem;
+    font-weight: 500;
+  }
+
   aside {
     position: sticky;
     top: 24px;
@@ -615,9 +1010,15 @@ const huntSchema = {
   }
 
   .price {
-    margin-bottom: 18px;
+    margin-bottom: 2px;
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 2rem;
+  }
+
+  .price-basis {
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-size: 0.82rem;
   }
 
   aside > p:not(.price):not(.price-label) {
@@ -687,8 +1088,23 @@ const huntSchema = {
     .gallery > div,
     .highlights,
     .package-grid,
-    .accommodation-card {
+    .accommodation-card,
+    .detail-grid,
+    .travel-grid,
+    .related-grid {
       grid-template-columns: 1fr;
+    }
+
+    .detail-grid .wide {
+      grid-column: auto;
+    }
+
+    .date-windows div,
+    .price-options article,
+    .service-list article {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
     }
   }
 </style>

@@ -1,0 +1,50 @@
+---
+import HuntCard from '../../components/HuntCard.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+import { publicSlug } from '../../lib/public-slugs';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const catalog = await loadCatalogSnapshot();
+  const collections = new Map<string, { name: string; hunts: typeof catalog.hunts }>();
+  for (const hunt of catalog.hunts) {
+    for (const species of [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])]) {
+      const slug = publicSlug(species);
+      const existing = collections.get(slug) ?? { name: species, hunts: [] };
+      if (!existing.hunts.some((item) => item.id === hunt.id)) existing.hunts.push(hunt);
+      collections.set(slug, existing);
+    }
+  }
+  return [...collections.entries()].map(([slug, collection]) => ({ params: { slug }, props: { ...collection, cards: collection.hunts.map((hunt) => ({ hunt, media: catalog.huntMedia.find((item) => item.hunt_id === hunt.id) })) } }));
+}
+
+const { name, cards } = Astro.props;
+const destinations = [...new Set(cards.map(({ hunt }) => [hunt.region, hunt.country].filter(Boolean).join(', ')))].sort();
+const heroImage = mediaUrl(cards[0]?.media);
+const canonicalPath = `/species/${Astro.params.slug}`;
+const schema = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `${name} hunts`, description: `Compare ${name} hunting packages from participating outfitters.`, mainEntity: { '@type': 'ItemList', numberOfItems: cards.length, itemListElement: cards.map(({ hunt }, index) => ({ '@type': 'ListItem', position: index + 1, name: hunt.title, url: new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString() })) } };
+---
+
+<BaseLayout title={`${name} Hunts | HuntSeeker`} description={`Compare ${name} hunts by destination, season, method, lodging, and price.`} canonicalPath={canonicalPath} image={heroImage} structuredData={schema}>
+  <section class="collection-hero" style={heroImage ? `--hero-image: url('${heroImage}')` : undefined}><div class="shade"></div><div class="container"><p>Species guide</p><h1>{name} hunts</h1><span>{destinations.join(' • ')}</span></div></section>
+  <section class="container collection"><div class="intro"><div><p class="eyebrow">Available packages</p><h2>{cards.length} {cards.length === 1 ? 'hunt' : 'hunts'} to compare</h2></div><p>Compare current packages by destination, timing, guiding, accommodations, travel requirements, and price.</p></div><div class="hunt-grid">{cards.map(({ hunt, media }) => <HuntCard hunt={hunt} media={media} />)}</div></section>
+</BaseLayout>
+
+<style>
+  .collection-hero { position: relative; min-height: 430px; display: grid; align-items: end; isolation: isolate; background: var(--dark) var(--hero-image) center / cover no-repeat; color: #fff; }
+  .shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(0deg, rgba(7,12,8,.9), rgba(7,12,8,.18)); }
+  .collection-hero .container { padding-bottom: 58px; }
+  .collection-hero p, .eyebrow { margin: 0 0 10px; color: #e6bd7d; font-size: .75rem; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+  h1, h2 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -.04em; }
+  h1 { font-size: clamp(3rem, 7vw, 6rem); line-height: .96; }
+  .collection-hero span { display: block; margin-top: 12px; color: rgba(255,255,255,.72); }
+  .collection { padding-top: 72px; padding-bottom: 100px; }
+  .intro { margin-bottom: 38px; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+  .intro h2 { font-size: clamp(2.4rem, 5vw, 4rem); }
+  .intro > p { margin: 0; color: var(--muted); line-height: 1.65; }
+  .hunt-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+  @media (max-width: 900px) { .hunt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px) { .intro { grid-template-columns: 1fr; gap: 18px; } .hunt-grid { grid-template-columns: 1fr; } }
+</style>
