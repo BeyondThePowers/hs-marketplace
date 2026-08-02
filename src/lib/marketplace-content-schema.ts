@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MarketplaceContentFeedV2Schema } from './content-contract-v2.ts';
 
 export const MarketplaceMediaSchema = z.object({
   url: z.string().url(),
@@ -151,3 +152,8 @@ export type MarketplaceSource = z.infer<typeof MarketplaceSourceSchema>;
 export type MarketplaceOutfitter = z.infer<typeof MarketplaceOutfitterSchema>;
 export type MarketplaceHuntContent = z.infer<typeof MarketplaceHuntContentSchema>;
 export type MarketplaceContentFeed = z.infer<typeof MarketplaceContentFeedSchema>;
+export const MarketplaceAnyContentFeedSchema = z.union([
+  MarketplaceContentFeedSchema,
+  MarketplaceContentFeedV2Schema,
+]);
+export type MarketplaceAnyContentFeed = z.infer<typeof MarketplaceAnyContentFeedSchema>;

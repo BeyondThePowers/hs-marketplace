@@ -1,0 +1,694 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const catalog = await loadCatalogSnapshot();
+  return catalog.hunts
+    .filter((hunt) => hunt.listing_id && hunt.id)
+    .map((hunt) => {
+      const relations = catalog.huntLodges.filter((relation) => relation.hunt_id === hunt.id);
+      const lodgeIds = new Set(relations.map((relation) => relation.lodge_record_id));
+      return {
+        params: { listingId: hunt.listing_id! },
+        props: {
+          hunt,
+          media: catalog.huntMedia.filter((item) => item.hunt_id === hunt.id),
+          accommodations: relations.map((relation) => ({
+            relation,
+            lodge: catalog.lodges.find((lodge) => lodgeIds.has(lodge.id) && lodge.id === relation.lodge_record_id),
+            media: catalog.lodgeMedia.filter((item) => item.lodge_record_id === relation.lodge_record_id),
+          })),
+        },
+      };
+    });
+}
+
+const { hunt, media, accommodations } = Astro.props;
+const arrangedAccommodations = Array.isArray(hunt.accommodations)
+  ? (hunt.accommodations as Array<Record<string, unknown>>).filter((item) => item.type === 'arranged')
+  : [];
+const heroImage = media[0] ? mediaUrl(media[0]) : null;
+const formatPrice = (amount: number | null, currency: string | null) =>
+  amount === null
+    ? 'Contact for price'
+    : new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency || 'USD',
+        maximumFractionDigits: 0,
+      }).format(amount);
+
+const duration = (hunt.duration_and_party ?? hunt.duration) as Record<string, unknown> | null;
+const season = (hunt.season_and_availability ?? hunt.season) as Record<string, unknown> | null;
+const durationLabel = duration
+  ? [duration.huntingDays && `${duration.huntingDays} hunting days`, duration.nights !== undefined && `${duration.nights} nights`]
+      .filter(Boolean)
+      .join(', ') || String(duration.label ?? duration.days ?? 'See package details')
+  : null;
+const seasonLabel = season ? String(season.display ?? season.label ?? season.summary ?? 'Ask outfitter') : null;
+const tripTypeLabel = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
+const sections = (Array.isArray(hunt?.sections) ? hunt.sections : [])
+  .map((section) => {
+    if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+    const item = section as Record<string, unknown>;
+    const body = item.body ?? item.content ?? item.description;
+    if (!body) return null;
+    return {
+      heading: String(item.heading ?? item.title ?? 'Package details'),
+      body,
+    };
+  })
+  .filter((section): section is { heading: string; body: unknown } => section !== null);
+const highlights = Array.isArray((hunt.editorial as Record<string, unknown> | null)?.highlights)
+  ? ((hunt.editorial as Record<string, unknown>).highlights as unknown[]).map(String)
+  : [];
+const inclusions = Array.isArray(hunt.inclusions) ? hunt.inclusions.map(String) : [];
+const exclusions = Array.isArray(hunt.exclusions) ? hunt.exclusions.map(String) : [];
+const itinerary = Array.isArray(hunt.itinerary) ? hunt.itinerary as Array<Record<string, unknown>> : [];
+const faqs = Array.isArray(hunt.faqs) ? hunt.faqs as Array<Record<string, unknown>> : [];
+const inquiry = hunt.outfitter_inquiry && typeof hunt.outfitter_inquiry === 'object' && !Array.isArray(hunt.outfitter_inquiry)
+  ? hunt.outfitter_inquiry as Record<string, unknown>
+  : null;
+const directInquiry = inquiry?.mode === 'source-endpoint' && typeof inquiry.submissionUrl === 'string'
+  ? inquiry
+  : null;
+const lodgeRegion = (location: unknown) => {
+  if (!location || typeof location !== 'object' || Array.isArray(location)) return null;
+  return String((location as Record<string, unknown>).region ?? '') || null;
+};
+const huntSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: hunt.title,
+  description: hunt.summary,
+  image: media.map((item) => mediaUrl(item)).filter(Boolean),
+  url: new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString(),
+  brand: { '@type': 'Organization', name: hunt.outfitter_name },
+  offers: hunt.starting_price === null ? undefined : {
+    '@type': 'Offer',
+    price: hunt.starting_price,
+    priceCurrency: hunt.currency || 'USD',
+    availability: 'https://schema.org/LimitedAvailability',
+    url: hunt.source_url,
+  },
+};
+---
+
+<BaseLayout
+  title={hunt ? `${hunt.title} | HuntSeeker` : 'Hunt not found | HuntSeeker'}
+  description={hunt?.summary || 'This hunt is not currently available in the marketplace.'}
+  canonicalPath={`/hunts/${hunt.listing_id}`}
+  image={heroImage}
+  structuredData={huntSchema}
+>
+  {hunt ? (
+    <>
+      <section class="detail-hero" style={heroImage ? `--hero-image: url('${heroImage}')` : undefined}>
+        <div class="shade"></div>
+        <div class="container hero-inner">
+          <a class="back" href="/#hunts">Back to all hunts</a>
+          <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+          <h1>{hunt.title}</h1>
+          <p class="outfitter">With {hunt.outfitter_name}</p>
+        </div>
+      </section>
+
+      <section class="container detail-layout">
+        <article>
+          <p class="summary">{hunt.summary}</p>
+
+          {highlights.length > 0 && (
+            <ul class="highlights">
+              {highlights.map((highlight) => <li>{highlight}</li>)}
+            </ul>
+          )}
+
+          <div class="facts">
+            <div><span>Species</span><strong>{(hunt.primary_species ?? []).join(', ')}</strong></div>
+            {duration && <div><span>Duration</span><strong>{durationLabel}</strong></div>}
+            {season && <div><span>Season</span><strong>{seasonLabel}</strong></div>}
+            <div><span>Trip type</span><strong>{tripTypeLabel}</strong></div>
+          </div>
+
+          {sections.map((section) => (
+              <section class="content-section">
+                <h2>{section.heading}</h2>
+                {Array.isArray(section.body) ? (
+                  <ul>{section.body.map((line) => <li>{String(line)}</li>)}</ul>
+                ) : (
+                  <p>{String(section.body)}</p>
+                )}
+              </section>
+          ))}
+
+          {(accommodations.length > 0 || arrangedAccommodations.length > 0) && (
+            <section class="content-section accommodation-section">
+              <h2>Where you will stay</h2>
+              <div class="accommodation-grid">
+                {accommodations.map(({ relation, lodge, media: lodgeMedia }) => lodge && (
+                  <article class="accommodation-card">
+                    {lodgeMedia[0] && <img src={mediaUrl(lodgeMedia[0]) || ''} alt={lodgeMedia[0].alt || lodge.name || ''} loading="lazy" />}
+                    <div>
+                      <p class="location">{relation.region_name || lodgeRegion(lodge.location) || 'Accommodation'}</p>
+                      <h3>{lodge.standalone_page === true ? <a href={`/lodges/${lodge.lodge_id}`}>{lodge.name}</a> : lodge.name}</h3>
+                      <p>{relation.summary || lodge.summary}</p>
+                      {relation.transfer_notes && <p class="transfer">{relation.transfer_notes}</p>}
+                    </div>
+                  </article>
+                ))}
+                {arrangedAccommodations.map((accommodation) => (
+                  <article class="accommodation-card arranged-accommodation">
+                    <div>
+                      <p class="location">{String(accommodation.regionName ?? 'Accommodation')}</p>
+                      <h3>{String(accommodation.name ?? accommodation.classification ?? 'Included accommodation')}</h3>
+                      <p>{String(accommodation.summary ?? '')}</p>
+                      {typeof accommodation.includedNights === 'number' && <p class="transfer">{accommodation.includedNights} nights included</p>}
+                      {accommodation.transferNotes && <p class="transfer">{String(accommodation.transferNotes)}</p>}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {(inclusions.length > 0 || exclusions.length > 0) && (
+            <section class="content-section package-grid">
+              {inclusions.length > 0 && <div><h2>Included</h2><ul>{inclusions.map((item) => <li>{item}</li>)}</ul></div>}
+              {exclusions.length > 0 && <div><h2>Not included</h2><ul>{exclusions.map((item) => <li>{item}</li>)}</ul></div>}
+            </section>
+          )}
+
+          {itinerary.length > 0 && (
+            <section class="content-section">
+              <h2>Typical itinerary</h2>
+              <ol class="itinerary">
+                {itinerary.map((item, index) => (
+                  <li>
+                    <strong>{String(item.title ?? item.label ?? `Day ${item.day ?? index + 1}`)}</strong>
+                    {item.description && <p>{String(item.description)}</p>}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {faqs.length > 0 && (
+            <section class="content-section">
+              <h2>Questions about this hunt</h2>
+              <div class="faqs">
+                {faqs.map((item) => (
+                  <details>
+                    <summary>{String(item.question ?? '')}</summary>
+                    <p>{String(item.answer ?? '')}</p>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {media.length > 1 && (
+            <section class="gallery">
+              <h2>From the field</h2>
+              <div>
+                {media.slice(1, 7).map((item) => (
+                  <img src={mediaUrl(item) || ''} alt={item.alt || hunt.title || ''} loading="lazy" />
+                ))}
+              </div>
+            </section>
+          )}
+        </article>
+
+        <aside>
+          <p class="price-label">Starting price</p>
+          <p class="price">{formatPrice(hunt.starting_price, hunt.currency)}</p>
+          <p>Confirm dates, availability, and final package terms directly with the outfitter.</p>
+          {directInquiry ? (
+            <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id}>
+              <h2>Ask about this hunt</h2>
+              <label><span>Name</span><input name="name" autocomplete="name" required /></label>
+              <label><span>Email</span><input name="email" type="email" autocomplete="email" required /></label>
+              <label><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required /></label>
+              <div class="form-row">
+                <label><span>From</span><input name="from_date" type="date" required /></label>
+                <label><span>To</span><input name="to_date" type="date" required /></label>
+              </div>
+              <div class="form-row">
+                <label><span>Hunters</span><input name="num_hunters" type="number" min="1" value="1" required /></label>
+                <label><span>Non-hunters</span><input name="num_non_hunters" type="number" min="0" value="0" /></label>
+              </div>
+              <label><span>Questions or requests</span><textarea name="special_requests" rows="4"></textarea></label>
+              <label class="website-field" aria-hidden="true"><span>Website</span><input name="website" tabindex="-1" autocomplete="off" /></label>
+              <button class="primary" type="submit">Send inquiry</button>
+              <p class="form-status" data-inquiry-status aria-live="polite"></p>
+            </form>
+          ) : (
+            <a class="primary" href={hunt.outfitter_inquiry_url || hunt.source_url || '#'}>Ask about this hunt</a>
+          )}
+          <a class="secondary" href={hunt.source_url || '#'}>View on outfitter site</a>
+        </aside>
+      </section>
+    </>
+  ) : (
+    <section class="container not-found">
+      <p class="eyebrow">Not found</p>
+      <h1>This hunt is not currently listed.</h1>
+      <p>It may have been paused or removed by the participating outfitter.</p>
+      <a href="/#hunts">Browse available hunts</a>
+    </section>
+  )}
+</BaseLayout>
+
+<script>
+  const inquiryForm = document.querySelector<HTMLFormElement>('[data-inquiry-form]');
+  if (inquiryForm) {
+    inquiryForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = inquiryForm.querySelector<HTMLElement>('[data-inquiry-status]');
+      const button = inquiryForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const values = Object.fromEntries(new FormData(inquiryForm));
+      if (status) status.textContent = 'Sending your inquiry...';
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch(inquiryForm.dataset.endpoint || '', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            ...values,
+            listing_id: inquiryForm.dataset.listingId,
+            referral_url: window.location.href,
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) throw new Error(result.message || result.error || 'Unable to send inquiry');
+        inquiryForm.reset();
+        if (status) status.textContent = result.booking_reference
+          ? `Your inquiry was sent. Reference ${result.booking_reference}.`
+          : 'Your inquiry was sent.';
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error
+          ? `${error.message}. You can also contact the outfitter through its website.`
+          : 'Unable to send inquiry. Please use the outfitter website.';
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  }
+</script>
+
+<style>
+  .detail-hero {
+    position: relative;
+    min-height: 560px;
+    display: grid;
+    align-items: end;
+    isolation: isolate;
+    background: var(--dark) var(--hero-image) center / cover no-repeat;
+    color: #fff;
+  }
+
+  .shade {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: linear-gradient(0deg, rgba(7, 12, 8, 0.9), rgba(7, 12, 8, 0.12) 76%);
+  }
+
+  .hero-inner {
+    padding-bottom: 64px;
+  }
+
+  .back {
+    display: inline-block;
+    margin-bottom: 100px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.9rem;
+  }
+
+  .location,
+  .eyebrow {
+    margin: 0 0 12px;
+    color: #e6bd7d;
+    font-size: 0.76rem;
+    font-weight: 750;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  h1,
+  h2,
+  p {
+    margin-top: 0;
+  }
+
+  h1,
+  h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 500;
+    letter-spacing: -0.035em;
+  }
+
+  h1 {
+    max-width: 900px;
+    margin-bottom: 12px;
+    font-size: clamp(3rem, 7vw, 6rem);
+    line-height: 0.96;
+  }
+
+  .outfitter {
+    margin-bottom: 0;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 1.05rem;
+  }
+
+  .detail-layout {
+    padding-top: 72px;
+    padding-bottom: 110px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+    gap: 80px;
+  }
+
+  .summary {
+    max-width: 760px;
+    color: #354039;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.35rem, 2.5vw, 1.85rem);
+    line-height: 1.45;
+  }
+
+  .facts {
+    margin: 42px 0 58px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--border);
+  }
+
+  .highlights {
+    margin: 32px 0 52px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 28px;
+    list-style: none;
+  }
+
+  .highlights li::before {
+    content: '✓';
+    margin-right: 9px;
+    color: var(--accent);
+    font-weight: 800;
+  }
+
+  .facts div {
+    padding: 18px 0;
+    display: grid;
+    gap: 5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .facts div:nth-child(odd) {
+    padding-right: 24px;
+  }
+
+  .facts span,
+  .price-label {
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .content-section {
+    padding: 34px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  h2 {
+    margin-bottom: 18px;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+  }
+
+  .content-section p,
+  .content-section li {
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .gallery {
+    margin-top: 40px;
+  }
+
+  .accommodation-grid {
+    display: grid;
+    gap: 18px;
+  }
+
+  .accommodation-card {
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(180px, 0.42fr) 1fr;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #fff;
+  }
+
+  .accommodation-card img {
+    width: 100%;
+    height: 100%;
+    min-height: 210px;
+    object-fit: cover;
+  }
+
+  .accommodation-card > div {
+    padding: 24px;
+  }
+
+  .accommodation-card h3 {
+    margin: 0 0 10px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.7rem;
+    font-weight: 500;
+  }
+
+  .accommodation-card p {
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .accommodation-card .transfer {
+    margin-bottom: 0;
+    font-size: 0.88rem;
+  }
+
+  .package-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 48px;
+  }
+
+  .package-grid h2 {
+    font-size: 2rem;
+  }
+
+  .itinerary,
+  .faqs {
+    display: grid;
+    gap: 12px;
+  }
+
+  .itinerary li,
+  .faqs details {
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .itinerary p,
+  .faqs p {
+    margin: 8px 0 0;
+  }
+
+  .faqs summary {
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .gallery > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .gallery img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 12px;
+  }
+
+  aside {
+    position: sticky;
+    top: 24px;
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(19, 31, 22, 0.08);
+  }
+
+  .inquiry-form {
+    display: grid;
+    gap: 13px;
+  }
+
+  .inquiry-form h2 {
+    margin: 2px 0 8px;
+    font-family: inherit;
+    font-size: 1.2rem;
+    font-weight: 750;
+    letter-spacing: 0;
+  }
+
+  .inquiry-form label {
+    display: grid;
+    gap: 5px;
+  }
+
+  .inquiry-form label span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .inquiry-form input,
+  .inquiry-form textarea {
+    width: 100%;
+    padding: 10px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--foreground);
+    font: inherit;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .website-field {
+    position: absolute;
+    left: -10000px;
+  }
+
+  .inquiry-form .primary {
+    width: 100%;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .inquiry-form .primary:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  .form-status {
+    min-height: 1.4em;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+
+  .price-label {
+    margin-bottom: 6px;
+  }
+
+  .price {
+    margin-bottom: 18px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 2rem;
+  }
+
+  aside > p:not(.price):not(.price-label) {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+
+  .primary,
+  .secondary {
+    min-height: 48px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .secondary {
+    border: 1px solid var(--border);
+  }
+
+  .not-found {
+    min-height: 70vh;
+    padding-top: 110px;
+  }
+
+  .not-found h1 {
+    color: var(--foreground);
+  }
+
+  .not-found a {
+    color: var(--accent-strong);
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
+  @media (max-width: 820px) {
+    .detail-layout {
+      grid-template-columns: 1fr;
+      gap: 48px;
+    }
+
+    aside {
+      position: static;
+      grid-row: 1;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .detail-hero {
+      min-height: 500px;
+    }
+
+    .back {
+      margin-bottom: 70px;
+    }
+
+    .facts,
+    .gallery > div,
+    .highlights,
+    .package-grid,
+    .accommodation-card {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

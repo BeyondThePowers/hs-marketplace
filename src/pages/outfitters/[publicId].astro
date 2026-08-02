@@ -1,0 +1,122 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const catalog = await loadCatalogSnapshot();
+  return catalog.outfitters
+    .filter((outfitter) => outfitter.public_id && outfitter.id)
+    .map((outfitter) => ({
+      params: { publicId: outfitter.public_id! },
+      props: {
+        outfitter,
+        hunts: catalog.hunts.filter((hunt) => hunt.source_id === outfitter.source_id),
+        media: catalog.huntMedia,
+        lodges: catalog.lodges.filter((lodge) => lodge.source_id === outfitter.source_id),
+      },
+    }));
+}
+
+const { outfitter, hunts, media, lodges } = Astro.props;
+const profileImage = outfitter.profile_image as Record<string, unknown> | null;
+const heroImage = typeof profileImage?.url === 'string' ? profileImage.url : null;
+const firstMedia = new Map<string, (typeof media)[number]>();
+for (const item of media) if (item.hunt_id && !firstMedia.has(item.hunt_id)) firstMedia.set(item.hunt_id, item);
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: outfitter.name,
+  description: outfitter.summary,
+  url: new URL(`/outfitters/${outfitter.public_id}`, Astro.site ?? Astro.url.origin).toString(),
+  foundingDate: outfitter.founded,
+  location: outfitter.headquarters,
+  sameAs: outfitter.social_urls ?? [],
+};
+---
+
+<BaseLayout
+  title={`${outfitter.name} | HuntSeeker Outfitters`}
+  description={outfitter.summary || outfitter.tagline || ''}
+  canonicalPath={`/outfitters/${outfitter.public_id}`}
+  image={heroImage}
+  structuredData={schema}
+>
+  <section class="profile-hero" style={heroImage ? `--hero-image: url('${heroImage}')` : undefined}>
+    <div class="shade"></div>
+    <div class="container hero-inner">
+      <a class="back" href="/#outfitters">Back to outfitters</a>
+      <p class="eyebrow">Participating outfitter</p>
+      <h1>{outfitter.name}</h1>
+      <p class="tagline">{outfitter.tagline}</p>
+    </div>
+  </section>
+
+  <section class="container profile">
+    <article>
+      <p class="intro">{outfitter.summary}</p>
+      <dl>
+        {outfitter.founded && <div><dt>Established</dt><dd>{outfitter.founded}</dd></div>}
+        {outfitter.headquarters && <div><dt>Based in</dt><dd>{outfitter.headquarters}</dd></div>}
+        {(outfitter.countries ?? []).length > 0 && <div><dt>Countries</dt><dd>{outfitter.countries?.join(', ')}</dd></div>}
+        {(outfitter.regions ?? []).length > 0 && <div><dt>Regions</dt><dd>{outfitter.regions?.join(', ')}</dd></div>}
+      </dl>
+    </article>
+    <aside>
+      <strong>{hunts.length} {hunts.length === 1 ? 'published hunt' : 'published hunts'}</strong>
+      <span>{lodges.length} {lodges.length === 1 ? 'accommodation' : 'accommodations'}</span>
+      <a href={outfitter.inquiry_url || outfitter.profile_url || '#'}>Ask this outfitter</a>
+      <a class="secondary" href={outfitter.profile_url || '#'}>Visit outfitter site</a>
+    </aside>
+  </section>
+
+  <section class="container collection">
+    <p class="eyebrow dark">Current packages</p>
+    <h2>Hunts with {outfitter.name}</h2>
+    <div class="hunt-grid">
+      {hunts.map((hunt) => (
+        <a class="hunt-card" href={`/hunts/${hunt.listing_id}`}>
+          {hunt.id && firstMedia.get(hunt.id) && <img src={mediaUrl(firstMedia.get(hunt.id)) || ''} alt={firstMedia.get(hunt.id)?.alt || hunt.title || ''} loading="lazy" />}
+          <div>
+            <p>{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+            <h3>{hunt.title}</h3>
+            <span>{(hunt.primary_species ?? []).join(', ')}</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .profile-hero { position: relative; min-height: 520px; display: grid; align-items: end; isolation: isolate; color: #fff; background: var(--dark) var(--hero-image) center / cover no-repeat; }
+  .shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(0deg, rgba(7,12,8,.9), rgba(7,12,8,.18)); }
+  .hero-inner { padding-bottom: 64px; }
+  .back { display: inline-block; margin-bottom: 90px; color: rgba(255,255,255,.76); }
+  .eyebrow { margin: 0 0 12px; color: #e6bd7d; font-size: .76rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+  .eyebrow.dark { color: var(--accent); }
+  h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -.035em; }
+  h1 { margin: 0 0 12px; font-size: clamp(3rem, 7vw, 6rem); }
+  .tagline { margin: 0; color: rgba(255,255,255,.75); font-size: 1.15rem; }
+  .profile { padding-top: 72px; display: grid; grid-template-columns: 1fr 330px; gap: 80px; align-items: start; }
+  .intro { max-width: 760px; color: #354039; font-family: Georgia, serif; font-size: clamp(1.35rem, 2.5vw, 1.85rem); line-height: 1.5; }
+  dl { margin-top: 40px; display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--border); }
+  dl div { padding: 18px 0; border-bottom: 1px solid var(--border); }
+  dt { color: var(--muted); font-size: .74rem; font-weight: 700; text-transform: uppercase; }
+  dd { margin: 5px 0 0; }
+  aside { padding: 26px; display: grid; gap: 9px; border: 1px solid var(--border); border-radius: 16px; background: #fff; }
+  aside span { color: var(--muted); }
+  aside a { margin-top: 12px; padding: 14px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; text-align: center; }
+  aside a.secondary { margin-top: 0; border: 1px solid var(--border); background: transparent; color: var(--foreground); }
+  .collection { padding-top: 84px; padding-bottom: 110px; }
+  h2 { margin: 0 0 30px; font-size: clamp(2.4rem, 5vw, 4rem); }
+  .hunt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .hunt-card { overflow: hidden; border: 1px solid var(--border); border-radius: 15px; background: #fff; }
+  .hunt-card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+  .hunt-card div { padding: 20px; }
+  .hunt-card p, .hunt-card span { color: var(--muted); font-size: .8rem; }
+  .hunt-card h3 { margin: 8px 0; font-size: 1.45rem; }
+  @media (max-width: 800px) { .profile { grid-template-columns: 1fr; gap: 36px; } .hunt-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .hunt-grid, dl { grid-template-columns: 1fr; } }
+</style>

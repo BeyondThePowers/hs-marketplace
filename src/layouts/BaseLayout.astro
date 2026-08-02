@@ -4,12 +4,19 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  canonicalPath?: string;
+  image?: string | null;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 const {
   title = 'HuntSeeker Marketplace',
   description = 'A public marketplace of outfitter hunt packages.',
+  canonicalPath = Astro.url.pathname,
+  image,
+  structuredData,
 } = Astro.props;
+const canonicalUrl = new URL(canonicalPath, Astro.site ?? Astro.url.origin).toString();
 ---
 
 <!doctype html>
@@ -18,11 +25,36 @@ const {
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    {image && <meta property="og:image" content={image} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
     <title>{title}</title>
+    {structuredData && <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />}
   </head>
   <body>
-    <main class="page-shell">
-      <slot />
-    </main>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="HuntSeeker marketplace home">
+        <span class="brand-mark">HS</span>
+        <span>HuntSeeker</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/#hunts">Explore hunts</a>
+        <a href="/#outfitters">Outfitters</a>
+      </nav>
+    </header>
+    <main class="page-shell"><slot /></main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div>
+          <strong>HuntSeeker</strong>
+          <p>Hunts published by participating outfitters.</p>
+        </div>
+        <a href="/#hunts">Browse all hunts</a>
+      </div>
+    </footer>
   </body>
 </html>

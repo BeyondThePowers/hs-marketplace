@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { MarketplaceContentFeedSchema } from '../src/lib/marketplace-content-schema.ts';
+import { MarketplaceAnyContentFeedSchema } from '../src/lib/marketplace-content-schema.ts';
 
 const paths = process.argv.slice(2);
 if (!paths.length) {
@@ -12,7 +12,7 @@ let failed = false;
 for (const inputPath of paths) {
   const path = resolve(process.cwd(), inputPath);
   try {
-    const feed = MarketplaceContentFeedSchema.parse(JSON.parse(await readFile(path, 'utf8')));
+    const feed = MarketplaceAnyContentFeedSchema.parse(JSON.parse(await readFile(path, 'utf8')));
     console.log(`${inputPath}: valid ${feed.schemaVersion} feed with ${feed.hunts.length} hunts`);
   } catch (error) {
     failed = true;

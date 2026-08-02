@@ -23,7 +23,7 @@ export const handler: Handler = async (event) => {
   const supabase = createServiceClient();
   const { data: source, error } = await supabase
     .from('marketplace_sources')
-    .select('source_id, enabled, webhook_secret_hash')
+    .select('source_id, participation_status, webhook_secret_hash')
     .eq('source_id', sourceId)
     .maybeSingle();
 
@@ -31,7 +31,7 @@ export const handler: Handler = async (event) => {
     console.error('[marketplace-sync] Source authentication lookup failed', error);
     return json(503, { error: 'Synchronization authentication is unavailable' });
   }
-  if (!source?.enabled || !source.webhook_secret_hash) {
+  if (source?.participation_status !== 'active' || !source.webhook_secret_hash) {
     return json(401, { error: 'Invalid source credentials' });
   }
   if (!verifySecret(token, source.webhook_secret_hash)) {

@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "DISABLE_NETLIFY_ADAPTER=1 XDG_CONFIG_HOME=.config ASTRO_TELEMETRY_DISABLED=1 astro dev --host 0.0.0.0 --port 4322",
-    "dev:netlify": "XDG_CONFIG_HOME=.config netlify dev",
+    "dev": "DISABLE_NETLIFY_ADAPTER=1 XDG_CONFIG_HOME=.config ASTRO_TELEMETRY_DISABLED=1 node --env-file-if-exists=.env node_modules/astro/bin/astro.mjs dev --host 0.0.0.0 --port 4322",
+    "dev:netlify": "XDG_CONFIG_HOME=.config node --env-file-if-exists=.env node_modules/netlify-cli/bin/run.js dev",
     "build": "XDG_CONFIG_HOME=.config ASTRO_TELEMETRY_DISABLED=1 astro build",
     "preview": "XDG_CONFIG_HOME=.config ASTRO_TELEMETRY_DISABLED=1 astro preview",
     "astro": "XDG_CONFIG_HOME=.config ASTRO_TELEMETRY_DISABLED=1 astro",
@@ -17,6 +17,9 @@
     "db:diff": "supabase db diff",
     "db:types": "supabase gen types typescript --local > src/lib/database.types.ts",
     "source:credential": "node scripts/generate-source-credential.mjs",
+    "source:status": "esbuild scripts/set-source-participation.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-source-status.mjs && node --env-file=.env /tmp/huntseeker-marketplace-source-status.mjs",
+    "source:moderate": "esbuild scripts/set-source-moderation.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-source-moderation.mjs && node --env-file=.env /tmp/huntseeker-marketplace-source-moderation.mjs",
+    "controls:verify": "esbuild scripts/verify-participation-controls.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-controls.mjs && node --env-file=.env /tmp/huntseeker-marketplace-controls.mjs",
     "feed:validate": "node --experimental-strip-types scripts/validate-feed-contract.mjs",
     "source:sync": "esbuild scripts/sync-source.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-sync.mjs && node --env-file=.env /tmp/huntseeker-marketplace-sync.mjs"
   },

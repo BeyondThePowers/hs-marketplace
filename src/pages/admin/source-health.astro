@@ -19,8 +19,8 @@ function credentials() {
   }
 }
 
-const expectedUser = import.meta.env.MARKETPLACE_DIAGNOSTICS_USER;
-const expectedPassword = import.meta.env.MARKETPLACE_DIAGNOSTICS_PASSWORD;
+const expectedUser = process.env.MARKETPLACE_DIAGNOSTICS_USER;
+const expectedPassword = process.env.MARKETPLACE_DIAGNOSTICS_PASSWORD;
 const supplied = credentials();
 // Compare both values with the same constant-time helper without ever exposing
 // them to page data or logs.
@@ -41,7 +41,10 @@ if (!validCredentials) {
 type SourceHealth = {
   sourceId: string;
   name: string;
-  enabled: boolean;
+  participationStatus: string;
+  consentConfirmedAt: string | null;
+  consentRecordedBy: string | null;
+  participationReason: string | null;
   feedEnabled: boolean;
   credentialConfigured: boolean;
   credentialHint: string | null;
@@ -79,7 +82,10 @@ if (validCredentials) {
       return {
         sourceId: source.source_id,
         name: source.name,
-        enabled: source.enabled,
+        participationStatus: source.participation_status,
+        consentConfirmedAt: source.consent_confirmed_at,
+        consentRecordedBy: source.consent_recorded_by,
+        participationReason: source.participation_reason,
         feedEnabled: source.feed_enabled,
         credentialConfigured: Boolean(source.webhook_secret_hash),
         credentialHint: source.webhook_secret_hint,
@@ -111,7 +117,7 @@ const formatDate = (value: string | null) =>
       <header>
         <p class="eyebrow">Marketplace operations</p>
         <h1>Source health</h1>
-        <p>Registered marketing feeds, webhook readiness, and reconciliation state.</p>
+        <p>Participation, consent, public feed state, and scheduled reconciliation.</p>
       </header>
 
       {loadError ? <div class="error" role="alert">{loadError}</div> : null}
@@ -130,9 +136,11 @@ const formatDate = (value: string | null) =>
             </div>
 
             <dl>
-              <div><dt>Registry</dt><dd>{source.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+              <div><dt>Participation</dt><dd>{source.participationStatus}</dd></div>
+              <div><dt>Consent confirmed</dt><dd>{formatDate(source.consentConfirmedAt)}</dd></div>
+              <div><dt>Consent recorded by</dt><dd>{source.consentRecordedBy ?? 'Not recorded'}</dd></div>
               <div><dt>Source feed</dt><dd>{source.feedEnabled ? 'Enabled' : 'Disabled'}</dd></div>
-              <div><dt>Webhook</dt><dd>{source.credentialConfigured ? `Configured · ${source.credentialHint ?? 'no hint'}` : 'Missing credential'}</dd></div>
+              <div><dt>Deploy webhook</dt><dd>{source.credentialConfigured ? `Optional, configured · ${source.credentialHint ?? 'no hint'}` : 'Optional, not configured'}</dd></div>
               <div><dt>Last attempt</dt><dd>{formatDate(source.lastSyncAt)}</dd></div>
               <div><dt>Last success</dt><dd>{formatDate(source.lastSuccessAt)}</dd></div>
               <div><dt>Duration</dt><dd>{source.durationMs === null ? 'Unknown' : `${source.durationMs} ms`}</dd></div>
@@ -144,6 +152,7 @@ const formatDate = (value: string | null) =>
             </dl>
 
             <a href={source.feedUrl} rel="noreferrer">Open registered feed</a>
+            {source.participationReason ? <p>Participation note: {source.participationReason}</p> : null}
             {source.lastError ? <p class="error">{source.lastError}</p> : null}
           </article>
         ))}

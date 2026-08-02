@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const catalog = await loadCatalogSnapshot();
+  return catalog.lodges
+    .filter((lodge) => lodge.lodge_id && lodge.id && lodge.standalone_page === true)
+    .map((lodge) => {
+      const huntIds = new Set(catalog.huntLodges.filter((item) => item.lodge_record_id === lodge.id).map((item) => item.hunt_id));
+      return {
+        params: { lodgeId: lodge.lodge_id! },
+        props: {
+          lodge,
+          media: catalog.lodgeMedia.filter((item) => item.lodge_record_id === lodge.id),
+          hunts: catalog.hunts.filter((hunt) => huntIds.has(hunt.id)),
+        },
+      };
+    });
+}
+
+const { lodge, media, hunts } = Astro.props;
+const heroImage = mediaUrl(media[0]);
+const location = lodge.location && typeof lodge.location === 'object' && !Array.isArray(lodge.location)
+  ? lodge.location as Record<string, unknown>
+  : {};
+const capacity = lodge.capacity && typeof lodge.capacity === 'object' && !Array.isArray(lodge.capacity)
+  ? lodge.capacity as Record<string, unknown>
+  : {};
+const amenities = Array.isArray(lodge.amenities) ? lodge.amenities as Array<Record<string, unknown>> : [];
+const highlights = Array.isArray(lodge.highlights) ? lodge.highlights.map(String) : [];
+const faqs = Array.isArray(lodge.faqs) ? lodge.faqs as Array<Record<string, unknown>> : [];
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'LodgingBusiness',
+  name: lodge.name,
+  description: lodge.summary,
+  image: media.map((item) => mediaUrl(item)).filter(Boolean),
+  url: new URL(`/lodges/${lodge.lodge_id}`, Astro.site ?? Astro.url.origin).toString(),
+  address: { '@type': 'PostalAddress', addressRegion: location.region, addressCountry: location.countryCode },
+};
+---
+
+<BaseLayout
+  title={`${lodge.name} | HuntSeeker Lodges`}
+  description={lodge.summary || ''}
+  canonicalPath={`/lodges/${lodge.lodge_id}`}
+  image={heroImage}
+  structuredData={schema}
+>
+  <section class="lodge-hero" style={heroImage ? `--hero-image: url('${heroImage}')` : undefined}>
+    <div class="shade"></div>
+    <div class="container hero-inner">
+      <a class="back" href="/#hunts">Back to hunts</a>
+      <p class="eyebrow">{String(location.region ?? lodge.classification ?? 'Hunting lodge')}</p>
+      <h1>{lodge.name}</h1>
+      {lodge.atmosphere_line && <p class="tagline">{lodge.atmosphere_line}</p>}
+    </div>
+  </section>
+
+  <section class="container lodge-content">
+    <article>
+      <p class="intro">{lodge.summary}</p>
+      {highlights.length > 0 && <ul class="highlights">{highlights.map((item) => <li>{item}</li>)}</ul>}
+      {amenities.length > 0 && (
+        <section>
+          <h2>At the lodge</h2>
+          <div class="amenities">{amenities.map((item) => <span>{String(item.name ?? item.key ?? '')}</span>)}</div>
+        </section>
+      )}
+      {media.length > 1 && (
+        <section>
+          <h2>Property gallery</h2>
+          <div class="gallery">{media.slice(1, 7).map((item) => <img src={mediaUrl(item) || ''} alt={item.alt || lodge.name || ''} loading="lazy" />)}</div>
+        </section>
+      )}
+      {faqs.length > 0 && (
+        <section>
+          <h2>Lodge questions</h2>
+          <div class="faqs">{faqs.map((item) => <details><summary>{String(item.question ?? '')}</summary><p>{String(item.answer ?? '')}</p></details>)}</div>
+        </section>
+      )}
+    </article>
+    <aside>
+      <p>Operated by <strong>{lodge.outfitter_name}</strong></p>
+      {capacity.rooms && <div><span>Rooms</span><strong>{String(capacity.rooms)}</strong></div>}
+      {capacity.guestsMaximum && <div><span>Maximum guests</span><strong>{String(capacity.guestsMaximum)}</strong></div>}
+      <a href={lodge.source_url || '#'}>View lodge on outfitter site</a>
+    </aside>
+  </section>
+
+  {hunts.length > 0 && (
+    <section class="related">
+      <div class="container">
+        <p class="eyebrow dark">Stay here</p>
+        <h2>Hunts using this lodge</h2>
+        <div class="hunt-links">{hunts.map((hunt) => <a href={`/hunts/${hunt.listing_id}`}><strong>{hunt.title}</strong><span>{(hunt.primary_species ?? []).join(', ')}</span></a>)}</div>
+      </div>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .lodge-hero { position: relative; min-height: 550px; display: grid; align-items: end; isolation: isolate; color: #fff; background: var(--dark) var(--hero-image) center / cover no-repeat; }
+  .shade { position: absolute; z-index: -1; inset: 0; background: linear-gradient(0deg, rgba(7,12,8,.92), rgba(7,12,8,.12)); }
+  .hero-inner { padding-bottom: 64px; }
+  .back { display: inline-block; margin-bottom: 100px; color: rgba(255,255,255,.76); }
+  .eyebrow { margin: 0 0 12px; color: #e6bd7d; font-size: .76rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+  .eyebrow.dark { color: var(--accent); }
+  h1, h2 { font-family: Georgia, 'Times New Roman', serif; font-weight: 500; letter-spacing: -.035em; }
+  h1 { margin: 0 0 12px; font-size: clamp(3rem, 7vw, 6rem); }
+  .tagline { margin: 0; color: rgba(255,255,255,.75); font-size: 1.1rem; }
+  .lodge-content { padding-top: 72px; padding-bottom: 100px; display: grid; grid-template-columns: 1fr 320px; gap: 76px; align-items: start; }
+  .intro { color: #354039; font-family: Georgia, serif; font-size: clamp(1.35rem, 2.5vw, 1.85rem); line-height: 1.5; }
+  .highlights { margin: 32px 0 58px; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 28px; list-style: none; }
+  .highlights li::before { content: '✓'; margin-right: 9px; color: var(--accent); font-weight: 800; }
+  article section { padding: 34px 0; border-top: 1px solid var(--border); }
+  h2 { margin: 0 0 22px; font-size: clamp(2rem, 4vw, 3.2rem); }
+  .amenities { display: flex; flex-wrap: wrap; gap: 9px; }
+  .amenities span { padding: 9px 12px; border-radius: 999px; background: #ecefe9; color: var(--muted); }
+  .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .gallery img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; }
+  .faqs { display: grid; gap: 10px; }
+  .faqs details { padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+  .faqs summary { cursor: pointer; font-weight: 700; }
+  .faqs p { color: var(--muted); line-height: 1.6; }
+  aside { padding: 26px; display: grid; gap: 12px; border: 1px solid var(--border); border-radius: 16px; background: #fff; }
+  aside > div { padding-top: 13px; display: flex; justify-content: space-between; border-top: 1px solid var(--border); }
+  aside span { color: var(--muted); }
+  aside a { margin-top: 10px; padding: 14px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; text-align: center; }
+  .related { padding: 84px 0 100px; background: #ecefe9; }
+  .hunt-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .hunt-links a { padding: 20px; display: grid; gap: 7px; border-radius: 13px; background: #fff; }
+  .hunt-links span { color: var(--muted); font-size: .82rem; }
+  @media (max-width: 800px) { .lodge-content { grid-template-columns: 1fr; gap: 36px; } .hunt-links { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .highlights, .gallery, .hunt-links { grid-template-columns: 1fr; } }
+</style>

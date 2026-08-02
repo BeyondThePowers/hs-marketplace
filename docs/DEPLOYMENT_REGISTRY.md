@@ -1,6 +1,6 @@
 # Marketplace deployment registry
 
-Last verified: 2026-07-31
+Last verified: 2026-08-01
 
 This document records non-secret deployment identities and marketplace
 onboarding state. API keys, database passwords, synchronization secrets, and
@@ -19,14 +19,16 @@ deployment provider's secret store.
 
 Verified state:
 
-- The marketplace integration reads the ABH marketing site's hunt collection.
-  It does not read either portal database.
-- The local marketing build publishes six active draft records with stable
-  listing IDs at `/marketplace-feed.json`.
-- The local feed passed contract validation and a real central reconciliation.
-- The updated marketing build still needs to be deployed before this source can
-  be enabled for routine synchronization.
-- The current live feed URL returns 404.
+- The marketplace reads only the ABH marketing site's public feed. It does not
+  read either portal database.
+- The live feed returns six active, ready records with stable listing IDs at
+  `/marketplace-feed.json`.
+- Feed URLs identify the deployed custom domain and no portal IDs are exported.
+- Participation is active with development authorization recorded.
+- The first readiness reconciliation changed six hunts. Its immediate repeat
+  changed zero hunts and zero media records.
+- The outfitter and six hunts have audited central development approval and are
+  available through the anonymous public views.
 
 ## JJ Caceria development deployment
 
@@ -40,57 +42,62 @@ Verified state:
 
 Verified state:
 
-- The marketplace integration reads the JJ marketing site's hunt collection.
-  It does not read the outfitter portal database.
-- The local marketing build publishes five active draft records with stable
-  listing IDs at `/marketplace-feed.json`.
-- The local feed passed contract validation and a real central reconciliation.
-- The rebuilt feed identifies the preview deployment as its source. The updated
-  marketing build still needs to be deployed before this source can be enabled
-  for routine synchronization.
-- The current live preview feed returns 200 but still declares
-  `https://jjcaceria.com.ar/marketplace-feed.json` as its identity. This does not
-  match the registered preview URL, so synchronization must remain disabled
-  until the rebuilt feed is deployed.
-- Package facts still require approval before records can move from `draft` to
-  `ready`.
+- The marketplace reads only the JJ marketing site's public feed. It does not
+  read the outfitter portal database.
+- The live feed returns five active, ready records with stable listing IDs at
+  `/marketplace-feed.json`.
+- Feed URLs identify the Netlify preview deployment and no portal IDs are
+  exported.
+- Participation is active with development authorization recorded.
+- The first readiness reconciliation changed five hunts. Its immediate repeat
+  changed zero hunts and zero media records.
+- The outfitter and five hunts have audited central development approval and
+  are available through the anonymous public views.
 
 ## Marketplace deployment
-
-A dedicated development Supabase project has been identified:
 
 | Role | Deployment |
 | --- | --- |
 | Supabase project ref | `gwuuxsxkrfqvvaelsoah` |
-| Netlify site | Not currently provisioned |
+| Netlify site | `https://huntseeker-marketplace.netlify.app/` |
 
-The Supabase CLI is linked to this project. All three committed migrations and
-the disabled development source registry seed were applied on 2026-07-31.
-The local marketplace runtime is configured through its ignored `.env` file.
+The development database has all committed migrations through
+`20260801000000_source_moderation_controls.sql`. Participation controls,
+publication triggers, row-level security, public views, audited moderation,
+scheduled reconciliation, authenticated optional webhooks, and protected
+source-health diagnostics are installed.
 
-The complete ingestion path was verified against locally served public builds
-and this remote database:
+Current public catalog state:
 
-- JJ imported 5 hunts and 16 media records. Its immediate repeat imported 0
-  changed hunts and 0 changed media records.
-- ABH imported 6 hunts and 52 media records. Its immediate repeat imported 0
-  changed hunts and 0 changed media records.
-- The database contains 11 active, non-orphaned hunt records and 68 media
-  records.
-- All 11 hunts remain `draft`, `pending_review`, and unpublished.
-- Four synchronization runs succeeded and no synchronization errors were
-  recorded.
-- After verification, both source rows were restored to their public HTTPS URLs
-  and disabled.
+- 2 active, participating outfitters
+- 11 ready and centrally approved hunts
+- 68 current media records
+- 5 JJ hunts and 6 ABH hunts
+- 0 changes on immediate repeat reconciliation for either source
+- Anonymous reads verified through `marketplace_public_hunts`,
+  `marketplace_public_outfitters`, and `marketplace_public_hunt_media`
 
-## Immediate next steps
+The first server-rendered catalog supports text, country, and species filters.
+Marketplace-owned hunt detail pages use stable listing IDs and send inquiry
+traffic to the publishing outfitter.
+Dynamic catalog and detail responses use `Cache-Control: no-cache` so source
+reconciliation, participation pauses, and moderation changes take effect on
+the next request without a marketplace redeploy.
 
-1. Deploy the updated JJ and ABH marketing builds.
-2. Verify each live feed's self-declared URL and contract.
-3. Provision the central marketplace Netlify site and protected diagnostics.
-4. Generate separate webhook credentials for JJ and ABH, configure both ends,
-   and enable one source at a time.
-5. Run live reconciliation twice for each source and compare it with the local
-   end-to-end baseline above.
-6. Review package facts, move approved source records to `ready`, and perform
-   central moderation before exposing public search pages.
+Development moderation approval allows interface and synchronization testing.
+Before a production release, the source records still require a final fact and
+copy review with each outfitter. Some JJ structured terms fields retain
+verification notes that the initial marketplace detail renderer intentionally
+does not display.
+
+## Next steps
+
+1. Complete visual and responsive review of the initial catalog and detail
+   pages.
+2. Review JJ and ABH facts and remove internal verification language before a
+   production release.
+3. Add pagination and database-side faceting as the source count grows.
+4. Add marketplace sitemap entries and richer hunt structured data.
+5. Add source-level pause and moderation controls to an authenticated operator
+   interface. The audited CLI and database functions remain the authoritative
+   controls until that interface exists.

@@ -11,7 +11,7 @@ export default defineConfig({
     ? undefined
     : netlify({
         imageCDN: true,
-        cacheOnDemandPages: true,
+        cacheOnDemandPages: false,
       }),
 
   server: {

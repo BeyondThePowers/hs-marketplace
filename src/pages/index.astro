@@ -1,57 +1,592 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
+
+export const prerender = true;
+
+const catalog = await loadCatalogSnapshot();
+const allHunts = catalog.hunts;
+const allMedia = catalog.huntMedia;
+const outfitters = catalog.outfitters;
+
+const countries = [...new Set(allHunts.map((hunt) => hunt.country).filter(Boolean))].sort();
+const speciesOptions = [...new Set(allHunts.flatMap((hunt) => hunt.primary_species ?? []))].sort();
+
+const mediaByHunt = new Map<string, (typeof allMedia)[number]>();
+for (const media of allMedia) {
+  if (media.hunt_id && !mediaByHunt.has(media.hunt_id)) mediaByHunt.set(media.hunt_id, media);
+}
+
+const imageUrl = (huntId: string | null) => {
+  if (!huntId) return null;
+  const media = mediaByHunt.get(huntId);
+  return mediaUrl(media);
+};
+
+const formatPrice = (amount: number | null, currency: string | null) => {
+  if (amount === null) return 'Contact for price';
+  return `From ${new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency || 'USD',
+    maximumFractionDigits: 0,
+  }).format(amount)}`;
+};
+
+const featuredImage = imageUrl(allHunts[0]?.id ?? null);
+const searchData = allHunts.map((hunt) => ({
+  id: hunt.listing_id,
+  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? [])]
+    .filter(Boolean)
+    .join(' ')
+    .toLocaleLowerCase(),
+  country: hunt.country ?? '',
+  species: hunt.primary_species ?? [],
+}));
+const collectionSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'Guided hunting trips',
+  description: 'Compare guided hunting trips published directly by participating outfitters.',
+  mainEntity: {
+    '@type': 'ItemList',
+    numberOfItems: allHunts.length,
+    itemListElement: allHunts.map((hunt, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      url: new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString(),
+      name: hunt.title,
+    })),
+  },
+};
 ---
 
 <BaseLayout
-  title="HuntSeeker Marketplace"
-  description="Explore hunt packages from independent outfitter deployments."
+  title="HuntSeeker | Guided hunting trips from independent outfitters"
+  description="Compare guided hunting trips published directly by participating outfitters."
+  image={featuredImage}
+  structuredData={collectionSchema}
 >
-  <section class="container hero">
-    <div>
-      <p class="eyebrow">HuntSeeker Marketplace</p>
-      <h1>Public hunt pages, synced from trusted outfitters.</h1>
-      <p class="lede">
-        This marketplace app will render cached, SEO-ready hunt pages from the
-        marketplace database and mirrored media storage.
+  <section class="hero" style={featuredImage ? `--hero-image: url('${featuredImage}')` : undefined}>
+    <div class="hero-shade"></div>
+    <div class="container hero-content">
+      <p class="eyebrow">Hunts from independent outfitters</p>
+      <h1>Find the hunt that fits how you want to travel.</h1>
+      <p>
+        Compare destinations, species, dates, and package details published by the outfitters who run each trip.
       </p>
+      <a class="hero-link" href="#hunts">Explore {allHunts.length} hunts</a>
+    </div>
+  </section>
+
+  <section class="catalog container" id="hunts">
+    <div class="catalog-heading">
+      <div>
+        <p class="eyebrow dark">Browse the current collection</p>
+        <h2>Guided hunts</h2>
+      </div>
+      <p class="result-count" aria-live="polite"><span data-result-count>{allHunts.length}</span> <span data-result-label>{allHunts.length === 1 ? 'hunt' : 'hunts'}</span></p>
+    </div>
+
+    <form class="filters" method="get" action="/#hunts">
+      <label>
+        <span>Search</span>
+        <input name="q" type="search" placeholder="Species, region, or outfitter" autocomplete="off" />
+      </label>
+      <label>
+        <span>Country</span>
+        <select name="country">
+          <option value="">All countries</option>
+          {countries.map((item) => <option value={item}>{item}</option>)}
+        </select>
+      </label>
+      <label>
+        <span>Species</span>
+        <select name="species">
+          <option value="">All species</option>
+          {speciesOptions.map((item) => <option value={item}>{item}</option>)}
+        </select>
+      </label>
+      <button type="submit">Show hunts</button>
+      <button class="clear" type="button" data-clear hidden>Clear</button>
+    </form>
+
+    <div class="hunt-grid">
+        {allHunts.map((hunt) => (
+          <article class="hunt-card" data-listing-id={hunt.listing_id}>
+            <a class="card-image" href={`/hunts/${hunt.listing_id}`}>
+              {imageUrl(hunt.id) ? (
+                <img src={imageUrl(hunt.id)!} alt={mediaByHunt.get(hunt.id!)?.alt || hunt.title || ''} loading="lazy" />
+              ) : (
+                <span>No image available</span>
+              )}
+            </a>
+            <div class="card-body">
+              <p class="location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+              <h3><a href={`/hunts/${hunt.listing_id}`}>{hunt.title}</a></h3>
+              <p class="summary">{hunt.summary}</p>
+              <div class="species">
+                {(hunt.primary_species ?? []).slice(0, 3).map((item) => <span>{item}</span>)}
+              </div>
+              <div class="card-footer">
+                <div>
+                  <small>{hunt.outfitter_name}</small>
+                  <strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong>
+                </div>
+                <a class="details" href={`/hunts/${hunt.listing_id}`}>View hunt</a>
+              </div>
+            </div>
+          </article>
+        ))}
+    </div>
+    <div class="empty" data-empty hidden>
+      <h3>No hunts match those filters.</h3>
+      <p>Try another species, destination, or search term.</p>
+      <button type="button" data-clear>See all hunts</button>
+    </div>
+  </section>
+
+  <section class="outfitters" id="outfitters">
+    <div class="container outfitters-inner">
+      <div>
+        <p class="eyebrow">Participating outfitters</p>
+        <h2>Published by the people who run the hunt.</h2>
+      </div>
+      <div class="outfitter-list">
+        {(outfitters ?? []).map((outfitter) => (
+          <a href={outfitter.public_id ? `/outfitters/${outfitter.public_id}` : outfitter.profile_url || '#'}>
+            <strong>{outfitter.name}</strong>
+            <span>{outfitter.tagline}</span>
+          </a>
+        ))}
+      </div>
     </div>
   </section>
 </BaseLayout>
 
+<script type="application/json" id="catalog-search-data" set:html={JSON.stringify(searchData)} />
+<script>
+  const form = document.querySelector<HTMLFormElement>('.filters');
+  const dataElement = document.querySelector<HTMLScriptElement>('#catalog-search-data');
+  const cards = new Map(
+    [...document.querySelectorAll<HTMLElement>('[data-listing-id]')].map((card) => [card.dataset.listingId, card])
+  );
+  const count = document.querySelector<HTMLElement>('[data-result-count]');
+  const label = document.querySelector<HTMLElement>('[data-result-label]');
+  const empty = document.querySelector<HTMLElement>('[data-empty]');
+
+  if (form && dataElement) {
+    const records = JSON.parse(dataElement.textContent || '[]') as Array<{
+      id: string;
+      search: string;
+      country: string;
+      species: string[];
+    }>;
+    const queryInput = form.elements.namedItem('q') as HTMLInputElement;
+    const countryInput = form.elements.namedItem('country') as HTMLSelectElement;
+    const speciesInput = form.elements.namedItem('species') as HTMLSelectElement;
+
+    const apply = () => {
+      const query = queryInput.value.trim().toLocaleLowerCase();
+      const country = countryInput.value;
+      const species = speciesInput.value;
+      let visible = 0;
+
+      for (const record of records) {
+        const matches =
+          (!query || record.search.includes(query)) &&
+          (!country || record.country === country) &&
+          (!species || record.species.includes(species));
+        const card = cards.get(record.id);
+        if (card) card.hidden = !matches;
+        if (matches) visible += 1;
+      }
+
+      if (count) count.textContent = String(visible);
+      if (label) label.textContent = visible === 1 ? 'hunt' : 'hunts';
+      if (empty) empty.hidden = visible !== 0;
+      const active = Boolean(query || country || species);
+      document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => (button.hidden = !active));
+
+      const params = new URLSearchParams();
+      if (queryInput.value.trim()) params.set('q', queryInput.value.trim());
+      if (country) params.set('country', country);
+      if (species) params.set('species', species);
+      const nextUrl = `${window.location.pathname}${params.size ? `?${params}` : ''}#hunts`;
+      history.replaceState(null, '', nextUrl);
+    };
+
+    const initial = new URLSearchParams(window.location.search);
+    queryInput.value = initial.get('q') ?? '';
+    countryInput.value = initial.get('country') ?? '';
+    speciesInput.value = initial.get('species') ?? '';
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      apply();
+    });
+    form.addEventListener('input', apply);
+    form.addEventListener('change', apply);
+    document.querySelectorAll<HTMLElement>('[data-clear]').forEach((button) => {
+      button.addEventListener('click', () => {
+        form.reset();
+        apply();
+      });
+    });
+    apply();
+  }
+</script>
+
 <style>
   .hero {
-    min-height: 100vh;
+    position: relative;
+    min-height: 610px;
     display: grid;
-    align-items: center;
-    padding: 96px 0;
+    align-items: end;
+    isolation: isolate;
+    color: #fff;
+    background: var(--dark) var(--hero-image) center 46% / cover no-repeat;
   }
 
-  .hero > div {
-    max-width: 760px;
+  .hero-shade {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(8, 13, 10, 0.92) 0%, rgba(8, 13, 10, 0.66) 52%, rgba(8, 13, 10, 0.2) 100%), linear-gradient(0deg, rgba(8, 13, 10, 0.65), transparent 55%);
+  }
+
+  .hero-content {
+    padding-bottom: 88px;
   }
 
   .eyebrow {
-    margin: 0 0 18px;
-    color: var(--accent);
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0;
+    margin: 0 0 14px;
+    color: #e6bd7d;
+    font-size: 0.76rem;
+    font-weight: 750;
+    letter-spacing: 0.13em;
     text-transform: uppercase;
   }
 
-  h1 {
-    margin: 0;
-    max-width: 780px;
-    font-size: clamp(2.5rem, 7vw, 5.5rem);
-    line-height: 0.98;
-    letter-spacing: 0;
+  .eyebrow.dark {
+    color: var(--accent);
   }
 
-  .lede {
+  h1,
+  h2,
+  h3,
+  p {
+    margin-top: 0;
+  }
+
+  h1,
+  h2 {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: 500;
+    letter-spacing: -0.04em;
+  }
+
+  h1 {
+    max-width: 780px;
+    margin-bottom: 22px;
+    font-size: clamp(3rem, 7vw, 6.4rem);
+    line-height: 0.93;
+  }
+
+  .hero-content > p:not(.eyebrow) {
     max-width: 650px;
-    margin: 28px 0 0;
+    margin-bottom: 30px;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    line-height: 1.6;
+  }
+
+  .hero-link,
+  .filters button,
+  .details {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .catalog {
+    padding-top: 88px;
+    padding-bottom: 110px;
+  }
+
+  .catalog-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  h2 {
+    margin-bottom: 0;
+    font-size: clamp(2.6rem, 5vw, 4.6rem);
+    line-height: 1;
+  }
+
+  .result-count {
+    margin-bottom: 8px;
     color: var(--muted);
-    font-size: clamp(1.05rem, 2vw, 1.35rem);
+  }
+
+  .filters {
+    margin: 36px 0 42px;
+    padding: 18px;
+    display: grid;
+    grid-template-columns: minmax(240px, 1.5fr) 1fr 1fr auto auto;
+    align-items: end;
+    gap: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .filters label {
+    display: grid;
+    gap: 7px;
+  }
+
+  .filters label span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .filters input,
+  .filters select {
+    width: 100%;
+    min-height: 46px;
+    padding: 0 13px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--foreground);
+  }
+
+  .clear {
+    padding: 13px 8px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .hunt-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .hunt-card {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: 0 14px 35px rgba(19, 31, 22, 0.06);
+  }
+
+  .card-image {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    background: #dce1da;
+    color: var(--muted);
+  }
+
+  .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 280ms ease;
+  }
+
+  .hunt-card:hover .card-image img {
+    transform: scale(1.025);
+  }
+
+  .card-body {
+    padding: 22px;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .location {
+    margin-bottom: 8px;
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  h3 {
+    margin-bottom: 12px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.62rem;
+    font-weight: 500;
+    line-height: 1.1;
+  }
+
+  .summary {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-size: 0.92rem;
     line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .species {
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+
+  .species span {
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: #f0f1ec;
+    color: #566057;
+    font-size: 0.72rem;
+  }
+
+  .card-footer {
+    margin-top: auto;
+    padding-top: 18px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-footer div {
+    display: grid;
+    gap: 5px;
+  }
+
+  .card-footer small {
+    color: var(--muted);
+  }
+
+  .details {
+    min-height: 38px;
+    padding: 0 14px;
+    background: var(--dark);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .empty {
+    padding: 64px 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: center;
+  }
+
+  .empty a {
+    color: var(--accent-strong);
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
+  .empty button {
+    border: 0;
+    background: transparent;
+    color: var(--accent-strong);
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .outfitters {
+    padding: 92px 0;
+    background: #1a251d;
+    color: #fff;
+  }
+
+  .outfitters-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 80px;
+  }
+
+  .outfitter-list {
+    display: grid;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .outfitter-list a {
+    padding: 22px 0;
+    display: grid;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .outfitter-list span {
+    color: rgba(255, 255, 255, 0.58);
+  }
+
+  @media (max-width: 940px) {
+    .filters {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .hunt-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 650px) {
+    .hero {
+      min-height: 540px;
+    }
+
+    .hero-content {
+      padding-bottom: 56px;
+    }
+
+    .catalog {
+      padding-top: 64px;
+      padding-bottom: 72px;
+    }
+
+    .catalog-heading,
+    .outfitters-inner {
+      display: block;
+    }
+
+    .result-count {
+      margin: 14px 0 0;
+    }
+
+    .filters,
+    .hunt-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .outfitter-list {
+      margin-top: 42px;
+    }
   }
 </style>
