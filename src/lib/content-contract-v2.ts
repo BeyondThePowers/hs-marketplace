@@ -178,6 +178,8 @@ export const PublicHuntSchema = z.object({
     tripType: z.enum(['BigGame', 'Wingshooting', 'Fishing', 'Combo']),
     primarySpecies: z.array(PublicTaxonomyRefSchema).min(1),
     secondarySpecies: z.array(PublicTaxonomyRefSchema).default([]),
+    equipment: z.array(PublicTaxonomyRefSchema).default([]),
+    techniques: z.array(PublicTaxonomyRefSchema).default([]),
     methods: z.array(PublicTaxonomyRefSchema).min(1),
   }),
   location: z.object({
@@ -263,6 +265,7 @@ export const PublicHuntSchema = z.object({
       ownership: z.enum(['private', 'public', 'mixed']).optional(),
       fenceStatus: z.enum(['free-range', 'high-fence', 'mixed', 'not-applicable']).optional(),
       terrain: z.array(z.string().min(1)).default([]),
+      accessMethods: z.array(PublicTaxonomyRefSchema).default([]),
       elevation: z.string().optional(),
     })
     .optional(),
