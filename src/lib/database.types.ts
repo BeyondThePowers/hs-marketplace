@@ -1262,13 +1262,34 @@ export type Database = {
       }
     }
     Functions: {
+      marketplace_claim_publication_build: {
+        Args: { minimum_age_seconds?: number; stale_after_minutes?: number }
+        Returns: {
+          revision_hash: string
+          revision_id: string
+        }[]
+      }
+      marketplace_fail_publication_build: {
+        Args: { failure_message: string; target_revision_id: string }
+        Returns: undefined
+      }
       marketplace_get_public_catalog: { Args: never; Returns: Json }
+      marketplace_get_public_revision: { Args: never; Returns: Json }
       marketplace_refresh_publication_for_source: {
         Args: { target_source_id: string }
         Returns: undefined
       }
       marketplace_source_is_public: {
         Args: { target_source_id: string }
+        Returns: boolean
+      }
+      marketplace_verify_publication_build: {
+        Args: {
+          target_deployment_id: string
+          target_deployment_url: string
+          target_revision_hash: string
+          target_revision_id: string
+        }
         Returns: boolean
       }
       set_marketplace_source_moderation: {

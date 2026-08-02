@@ -13,6 +13,7 @@ export const GET: APIRoute = async () => {
   const body = {
     schemaVersion: '1.0',
     revision: catalog.revision,
+    publicationRevision: catalog.publicationRevision,
     generatedAt: catalog.generatedAt,
     hunts: catalog.hunts.map((hunt) => ({
       listingId: hunt.listing_id,

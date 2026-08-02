@@ -14,6 +14,9 @@
 [functions."scheduled-sync"]
   schedule = "@hourly"
 
+[functions."scheduled-publication-build"]
+  schedule = "* * * * *"
+
 [dev]
   command = "npm run dev"
   port = 8889
@@ -25,4 +28,5 @@
 # SUPABASE_URL
 # SUPABASE_ANON_KEY
 # SUPABASE_SERVICE_ROLE_KEY
+# MARKETPLACE_BUILD_HOOK_URL
 # ALLOW_INSECURE_SOURCE_URLS (local development only)

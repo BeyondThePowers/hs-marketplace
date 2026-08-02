@@ -1,6 +1,6 @@
 # Marketplace static publication implementation plan
 
-Status: Core static catalog implemented, deployment automation pending
+Status: Core static catalog and revision-driven deployment automation implemented
 
 Last reviewed: 2026-08-01
 
@@ -82,8 +82,9 @@ the sharded static index slower or heavier than a remote query.
 - Central publication revisions and stable accepted source hashes are stored.
 - `marketplace_get_public_catalog()` returns all public entity sets from one
   PostgreSQL statement, preventing mixed-time build snapshots.
-- The marketplace pre-renders the discovery page, 11 hunt pages, 11 lodge
-  pages, and 2 outfitter pages from one memoized snapshot per build.
+- The marketplace pre-renders the discovery page, 11 hunt pages, and 2
+  outfitter pages from one memoized snapshot per build. Lodge pages are
+  generated only when a source explicitly enables one.
 - `/catalog-index.json` is static, contains only compact discovery facts, and
   identifies its content with a stable SHA-256 revision.
 - Discovery filters run in the browser over HTML that already contains every
@@ -94,10 +95,9 @@ the sharded static index slower or heavier than a remote query.
 - `/health.json`, protected source diagnostics, reconciliation, and webhooks
   remain dynamic operational routes.
 
-The remaining essential work is the complete hunt renderer, source-owned
-marketplace inquiry submission, build-hook automation and deployed-revision
-verification, the participation guard, curated taxonomy landing pages, and
-measured performance and accessibility testing.
+The remaining essential work is the complete hunt renderer, the participation
+guard, curated taxonomy landing pages, and measured performance and
+accessibility testing.
 
 ### 1. Lock the public contract
 

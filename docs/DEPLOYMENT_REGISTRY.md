@@ -62,10 +62,10 @@ Verified state:
 | Netlify site | `https://huntseeker-marketplace.netlify.app/` |
 
 The development database has all committed migrations through
-`20260801000000_source_moderation_controls.sql`. Participation controls,
+`20260801014000_publication_build_queue.sql`. Participation controls,
 publication triggers, row-level security, public views, audited moderation,
-scheduled reconciliation, authenticated optional webhooks, and protected
-source-health diagnostics are installed.
+scheduled reconciliation, authenticated optional webhooks, protected
+source-health diagnostics, and the revision-driven build queue are installed.
 
 Current public catalog state:
 
@@ -77,12 +77,14 @@ Current public catalog state:
 - Anonymous reads verified through `marketplace_public_hunts`,
   `marketplace_public_outfitters`, and `marketplace_public_hunt_media`
 
-The first server-rendered catalog supports text, country, and species filters.
-Marketplace-owned hunt detail pages use stable listing IDs and send inquiry
-traffic to the publishing outfitter.
-Dynamic catalog and detail responses use `Cache-Control: no-cache` so source
-reconciliation, participation pauses, and moderation changes take effect on
-the next request without a marketplace redeploy.
+The public catalog, hunt pages, and outfitter pages are pre-rendered. Text,
+country, and species filters progressively enhance the complete static hunt
+card set in the browser. Marketplace-owned hunt detail pages use stable listing
+IDs and submit inquiries through source-owned marketing endpoints.
+
+Accepted public changes enter a debounced publication queue and trigger a
+main-branch Netlify build. Each static catalog embeds its publication revision,
+and the deploy event verifies that marker against the central database.
 
 Development moderation approval allows interface and synchronization testing.
 Before a production release, the source records still require a final fact and

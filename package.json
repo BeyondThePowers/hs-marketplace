@@ -21,7 +21,8 @@
     "source:moderate": "esbuild scripts/set-source-moderation.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-source-moderation.mjs && node --env-file=.env /tmp/huntseeker-marketplace-source-moderation.mjs",
     "controls:verify": "esbuild scripts/verify-participation-controls.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-controls.mjs && node --env-file=.env /tmp/huntseeker-marketplace-controls.mjs",
     "feed:validate": "node --experimental-strip-types scripts/validate-feed-contract.mjs",
-    "source:sync": "esbuild scripts/sync-source.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-sync.mjs && node --env-file=.env /tmp/huntseeker-marketplace-sync.mjs"
+    "source:sync": "esbuild scripts/sync-source.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-sync.mjs && node --env-file=.env /tmp/huntseeker-marketplace-sync.mjs",
+    "publication:request": "esbuild scripts/request-publication-build.ts --bundle --platform=node --format=esm --outfile=/tmp/huntseeker-marketplace-publication-request.mjs && node --env-file=.env /tmp/huntseeker-marketplace-publication-request.mjs"
   },
   "dependencies": {
     "@astrojs/netlify": "^7.0.10",

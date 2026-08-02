@@ -15,6 +15,11 @@ export type CatalogLodgeMedia = ViewRow<'marketplace_public_lodge_media'>;
 export type CatalogSnapshot = {
   revision: string;
   generatedAt: string;
+  publicationRevision: {
+    id: string;
+    revisionHash: string;
+    acceptedAt: string;
+  } | null;
   hunts: CatalogHunt[];
   huntMedia: CatalogHuntMedia[];
   outfitters: CatalogOutfitter[];
@@ -45,6 +50,10 @@ async function queryCatalog(): Promise<CatalogSnapshot> {
     throw new Error('Public catalog snapshot returned an invalid payload');
   }
   const value = data as Record<string, unknown>;
+  const rawPublicationRevision = value.publicationRevision;
+  const publicationRevision = rawPublicationRevision && typeof rawPublicationRevision === 'object' && !Array.isArray(rawPublicationRevision)
+    ? rawPublicationRevision as Record<string, unknown>
+    : null;
   const content = {
     hunts: (Array.isArray(value.hunts) ? value.hunts : []) as CatalogHunt[],
     huntMedia: (Array.isArray(value.huntMedia) ? value.huntMedia : []) as CatalogHuntMedia[],
@@ -58,6 +67,16 @@ async function queryCatalog(): Promise<CatalogSnapshot> {
   return {
     revision,
     generatedAt: new Date().toISOString(),
+    publicationRevision: publicationRevision &&
+      typeof publicationRevision.id === 'string' &&
+      typeof publicationRevision.revisionHash === 'string' &&
+      typeof publicationRevision.acceptedAt === 'string'
+      ? {
+          id: publicationRevision.id,
+          revisionHash: publicationRevision.revisionHash,
+          acceptedAt: publicationRevision.acceptedAt,
+        }
+      : null,
     ...content,
   };
 }
