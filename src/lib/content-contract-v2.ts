@@ -11,6 +11,11 @@ export const PublicTaxonomyRefSchema = z.object({
   name: z.string().min(1),
 });
 
+export const PublicSpeciesTaxonomyRefSchema = PublicTaxonomyRefSchema.extend({
+  pursuitGroup: PublicTaxonomyRefSchema.optional(),
+  speciesGroup: PublicTaxonomyRefSchema.optional(),
+});
+
 export const PublicMediaSchema = z.object({
   id: z.string().min(1),
   url: absoluteUrl,
@@ -176,8 +181,8 @@ export const PublicHuntSchema = z.object({
   active: z.boolean(),
   classification: z.object({
     tripType: z.enum(['BigGame', 'Wingshooting', 'Fishing', 'Combo']),
-    primarySpecies: z.array(PublicTaxonomyRefSchema).min(1),
-    secondarySpecies: z.array(PublicTaxonomyRefSchema).default([]),
+    primarySpecies: z.array(PublicSpeciesTaxonomyRefSchema).min(1),
+    secondarySpecies: z.array(PublicSpeciesTaxonomyRefSchema).default([]),
     equipment: z.array(PublicTaxonomyRefSchema).default([]),
     techniques: z.array(PublicTaxonomyRefSchema).default([]),
     methods: z.array(PublicTaxonomyRefSchema).min(1),

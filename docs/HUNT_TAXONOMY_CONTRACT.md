@@ -23,6 +23,27 @@ Each marketing-site hunt record may publish:
 Values must be factual source content. Missing information remains an empty
 array and must not be inferred from the species, region, or package title.
 
+## Species browsing hierarchy
+
+Every published primary and secondary species should include two optional,
+backward-compatible taxonomy references in Feed V2:
+
+- `pursuitGroup`: the broad browsing family, such as `big-game`,
+  `game-birds`, `fishing`, or `small-game`.
+- `speciesGroup`: a narrower biological or hunting convention useful for
+  scanning, such as `waterfowl`, `dove-and-pigeon`, or `upland-birds`.
+
+The marketplace renders pursuit and species groups as non-selectable labels
+inside one Species facet. Individual species remain the selectable values, so
+OR within Species and AND across facets do not change. Group labels must not
+silently act as filters. A future parent selection must be exposed explicitly
+as an option such as "All waterfowl" with a stable URL parameter.
+
+Publishers own this classification through their site taxonomy configuration.
+The marketplace may maintain a compatibility registry for feeds published
+before the metadata existed, but must not infer a group from prose or a hunt
+title. Unclassified values appear under Other species rather than disappearing.
+
 ## Public feed mapping
 
 Feed V2 exposes the same concepts as:

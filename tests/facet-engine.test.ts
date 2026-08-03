@@ -8,6 +8,7 @@ import {
   type FacetRecord,
   type FacetState,
 } from '../src/lib/facet-engine.ts';
+import { speciesTaxonomyFor } from '../src/data/species-taxonomy.ts';
 
 const records: FacetRecord[] = [
   { id: 'duck', sourceId: 'a', search: 'duck dove argentina', country: 'Argentina', region: 'Santa Fe', species: ['Duck', 'Dove'], tripType: 'Combo', equipment: ['Shotgun'], techniques: ['Blind hunting', 'Decoying'], terrain: ['Wetlands'], access: ['Boat'], price: 3000, huntingDays: 5 },
@@ -59,4 +60,22 @@ test('round trips repeated shareable parameters', () => {
 
 test('excludes inactive sources before calculating results', () => {
   assert.deepEqual(filterFacetRecords(records, state(), ['a']).map(({ id }) => id), ['elk']);
+});
+
+test('groups known species without inferring taxonomy from hunt prose', () => {
+  assert.deepEqual(speciesTaxonomyFor('Cinnamon Teal'), {
+    pursuitGroup: { key: 'game-birds', name: 'Game birds' },
+    speciesGroup: { key: 'waterfowl', name: 'Waterfowl' },
+  });
+  assert.deepEqual(speciesTaxonomyFor('Unclassified Quarry'), {
+    pursuitGroup: { key: 'other-species', name: 'Other species' },
+  });
+});
+
+test('prefers taxonomy published by the source feed', () => {
+  const published = {
+    pursuitGroup: { key: 'small-game', name: 'Small game' },
+    speciesGroup: { key: 'rabbit-and-hare', name: 'Rabbit and hare' },
+  };
+  assert.deepEqual(speciesTaxonomyFor('Snowshoe Hare', published), published);
 });

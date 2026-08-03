@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import HuntCard from '../components/HuntCard.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
-import { publicSlug } from '../lib/public-slugs';
+import { speciesKey, speciesTaxonomyFor, type SpeciesTaxonomy } from '../data/species-taxonomy';
 
 export const prerender = true;
 
@@ -12,7 +12,10 @@ const allMedia = catalog.huntMedia;
 const outfitters = catalog.outfitters;
 
 const countries = [...new Set(allHunts.map((hunt) => hunt.country).filter(Boolean))].sort();
-const speciesOptions = [...new Set(allHunts.flatMap((hunt) => hunt.primary_species ?? []))].sort();
+const speciesOptions = [...new Set(allHunts.flatMap((hunt) => [
+  ...(hunt.primary_species ?? []),
+  ...(hunt.secondary_species ?? []),
+]))].sort();
 const regions = [...new Set(allHunts.map((hunt) => hunt.region).filter(Boolean))].sort();
 const tripTypes = [...new Set(allHunts.map((hunt) => hunt.trip_type).filter(Boolean))].sort();
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -35,9 +38,45 @@ const destinationGroups = countries.map((country) => ({
   country,
   regions: [...new Set(allHunts.filter((hunt) => hunt.country === country).map((hunt) => hunt.region).filter(Boolean))].sort(),
 }));
-const destinationLinks = regions.map((region) => {
-  const country = allHunts.find((hunt) => hunt.region === region)?.country ?? '';
-  return { name: region, country, href: `/destinations/${publicSlug(`${region}-${country}`)}` };
+const publishedSpeciesTaxonomy = new Map<string, SpeciesTaxonomy>();
+for (const hunt of allHunts) {
+  const classification = record(hunt.classification);
+  for (const value of records(classification?.primarySpecies).concat(records(classification?.secondarySpecies))) {
+    const name = String(value.name ?? '');
+    const pursuitGroup = record(value.pursuitGroup);
+    const speciesGroup = record(value.speciesGroup);
+    if (!name || !pursuitGroup?.key || !pursuitGroup?.name) continue;
+    const key = speciesKey(name);
+    const published = {
+      pursuitGroup: { key: String(pursuitGroup.key), name: String(pursuitGroup.name) },
+      ...(speciesGroup?.key && speciesGroup?.name
+        ? { speciesGroup: { key: String(speciesGroup.key), name: String(speciesGroup.name) } }
+        : {}),
+    };
+    const existing = publishedSpeciesTaxonomy.get(key);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(published)) {
+      throw new Error(`Conflicting published species taxonomy for "${name}"`);
+    }
+    publishedSpeciesTaxonomy.set(key, published);
+  }
+}
+const pursuitOrder = ['big-game', 'game-birds', 'fishing', 'small-game', 'other-species'];
+const speciesGroups = Object.values(speciesOptions.reduce<Record<string, {
+  key: string;
+  name: string;
+  subgroups: Record<string, { key: string; name: string; species: string[] }>;
+}>>((groups, species) => {
+  const taxonomy = speciesTaxonomyFor(species, publishedSpeciesTaxonomy.get(speciesKey(species)));
+  const pursuit = taxonomy.pursuitGroup;
+  const subgroup = taxonomy.speciesGroup ?? pursuit;
+  groups[pursuit.key] ??= { key: pursuit.key, name: pursuit.name, subgroups: {} };
+  groups[pursuit.key].subgroups[subgroup.key] ??= { key: subgroup.key, name: subgroup.name, species: [] };
+  groups[pursuit.key].subgroups[subgroup.key].species.push(species);
+  return groups;
+}, {})).sort((left, right) => {
+  const leftIndex = pursuitOrder.indexOf(left.key);
+  const rightIndex = pursuitOrder.indexOf(right.key);
+  return (leftIndex < 0 ? pursuitOrder.length : leftIndex) - (rightIndex < 0 ? pursuitOrder.length : rightIndex) || left.name.localeCompare(right.name);
 });
 
 const mediaByHunt = new Map<string, (typeof allMedia)[number]>();
@@ -117,11 +156,6 @@ const collectionSchema = {
     </div>
   </section>
 
-  <nav class="browse-links wide-container" aria-label="Browse hunts by destination or species">
-    <div><span>Destinations</span>{destinationLinks.map((item) => <a href={item.href}>{item.name}</a>)}</div>
-    <div><span>Species</span>{speciesOptions.map((item) => <a href={`/species/${publicSlug(item)}`}>{item}</a>)}</div>
-  </nav>
-
   <section class="catalog wide-container" id="hunts">
     <div class="catalog-heading">
       <div>
@@ -167,13 +201,25 @@ const collectionSchema = {
             <summary>Species</summary>
             <div class="filter-group">
               {speciesOptions.length > 7 && <label class="facet-search"><span>Find a species</span><input type="search" placeholder="Search species" autocomplete="off" data-facet-search="species" /></label>}
-              <div class="facet-options" data-facet-list="species">
-                {speciesOptions.map((item) => (
-                  <label class="check-option" data-facet-option>
-                    <input type="checkbox" name="species" value={item} data-facet="species" data-label={item} />
-                    <span>{item}</span>
-                    <small data-facet-count data-facet="species" data-value={item}>{allHunts.filter((hunt) => [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])].includes(item)).length}</small>
-                  </label>
+              <div class="species-groups" data-facet-list="species">
+                {speciesGroups.map((group) => (
+                  <section class="species-group" data-species-group>
+                    <h3>{group.name}</h3>
+                    {Object.values(group.subgroups).map((subgroup) => (
+                      <div class="species-subgroup" data-species-subgroup>
+                        {Object.keys(group.subgroups).length > 1 && <p>{subgroup.name}</p>}
+                        <div class="facet-options">
+                          {subgroup.species.map((item) => (
+                            <label class="check-option" data-facet-option>
+                              <input type="checkbox" name="species" value={item} data-facet="species" data-label={item} />
+                              <span>{item}</span>
+                              <small data-facet-count data-facet="species" data-value={item}>{allHunts.filter((hunt) => [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])].includes(item)).length}</small>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </section>
                 ))}
               </div>
               <label class="species-mode" data-species-mode hidden>
@@ -495,6 +541,12 @@ const collectionSchema = {
         list?.querySelectorAll<HTMLElement>('[data-facet-option]').forEach((option) => {
           option.hidden = Boolean(query && !option.textContent?.toLocaleLowerCase().includes(query));
         });
+        list?.querySelectorAll<HTMLElement>('[data-species-subgroup]').forEach((subgroup) => {
+          subgroup.hidden = !subgroup.querySelector('[data-facet-option]:not([hidden])');
+        });
+        list?.querySelectorAll<HTMLElement>('[data-species-group]').forEach((group) => {
+          group.hidden = !group.querySelector('[data-facet-option]:not([hidden])');
+        });
       });
     });
 
@@ -605,38 +657,6 @@ const collectionSchema = {
   .catalog {
     padding-top: 88px;
     padding-bottom: 110px;
-  }
-
-  .browse-links {
-    padding-top: 34px;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 24px;
-  }
-
-  .browse-links div {
-    padding-bottom: 22px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 9px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .browse-links span {
-    width: 100%;
-    color: var(--muted);
-    font-size: .72rem;
-    font-weight: 750;
-    letter-spacing: .08em;
-    text-transform: uppercase;
-  }
-
-  .browse-links a {
-    padding: 7px 11px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: #fff;
-    font-size: .82rem;
   }
 
   .catalog-heading {
@@ -899,13 +919,8 @@ const collectionSchema = {
     }
 
     .catalog-heading,
-    .outfitters-inner,
-    .browse-links {
+    .outfitters-inner {
       display: block;
-    }
-
-    .browse-links div + div {
-      padding-top: 22px;
     }
 
     .result-count {
@@ -1074,6 +1089,37 @@ const collectionSchema = {
   .facet-options {
     display: grid;
     gap: 2px;
+  }
+
+  .species-groups {
+    display: grid;
+    gap: 18px;
+  }
+
+  .species-group h3,
+  .species-subgroup p {
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: .72rem;
+    font-weight: 780;
+    letter-spacing: .075em;
+    text-transform: uppercase;
+  }
+
+  .species-group h3 {
+    padding: 0 4px 5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .species-subgroup {
+    margin-top: 8px;
+  }
+
+  .species-subgroup p {
+    padding: 2px 4px 3px;
+    color: var(--muted);
+    font-size: .64rem;
   }
 
   .facet-subheading {
@@ -1402,18 +1448,5 @@ const collectionSchema = {
       font-size: .78rem;
     }
 
-    .browse-links {
-      display: block;
-    }
-
-    .browse-links div {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-
-    .browse-links div + div {
-      padding-top: 18px;
-    }
   }
 </style>

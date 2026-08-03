@@ -282,6 +282,18 @@ withdrawal fails closed.
 - A separate simple and advanced mode is intentionally avoided. Progressive
   disclosure keeps the normal case direct while revealing the combination
   species rule only when it can change the meaning of a search.
+- Species is one grouped facet, not several competing filters. Non-selectable
+  pursuit headings organize species into Big game, Game birds, Fishing, Small
+  game, and a compatibility fallback. Optional species-group headings provide
+  useful distinctions such as Waterfowl, Dove and pigeon, and Upland birds.
+  Both primary and secondary species are selectable. The hierarchy is
+  published as stable taxonomy metadata in the source feed and is never
+  inferred from hunt prose by the interface.
+- Taxonomy landing pages remain part of the static publication and answer
+  engine surface, but the former destination and species pill strip was
+  removed from the catalog because static links styled as filter chips created
+  a misleading second discovery control. Applied-filter chips remain visible
+  above results because they communicate and remove the active search state.
 - The former hunting-method facet has been replaced by independent Equipment,
   Hunt style, Terrain, and Access facets. Their source and compatibility rules
   are defined in `HUNT_TAXONOMY_CONTRACT.md`. The marketplace does not infer
