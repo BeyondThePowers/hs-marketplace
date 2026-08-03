@@ -161,6 +161,7 @@ const collectionSchema = {
       <div>
         <p class="eyebrow dark">Browse the current collection</p>
         <h2>Guided hunts</h2>
+        <p class="catalog-note">Prices and availability are confirmed by each outfitter.</p>
       </div>
       <div class="catalog-actions">
         <p class="result-count" aria-live="polite"><span data-result-count>{allHunts.length}</span> <span data-result-label>{allHunts.length === 1 ? 'hunt' : 'hunts'}</span></p>
@@ -302,7 +303,7 @@ const collectionSchema = {
       </aside>
 
       <div class="results-column">
-        <div class="results-toolbar"><div class="active-filters" data-active-filters></div><p>Prices and availability are confirmed by each outfitter.</p></div>
+        <div class="results-toolbar"><div class="active-filters" data-active-filters></div></div>
         <div class="hunt-grid">
           {allHunts.map((hunt, index) => <HuntCard hunt={hunt} media={hunt.id ? mediaByHunt.get(hunt.id) : undefined} mediaCount={hunt.id ? mediaCountByHunt.get(hunt.id) : 0} eager={index < 2} />)}
         </div>
@@ -675,6 +676,12 @@ const collectionSchema = {
   .result-count {
     margin-bottom: 8px;
     color: var(--muted);
+  }
+
+  .catalog-note {
+    margin: 12px 0 0;
+    color: var(--muted);
+    font-size: .82rem;
   }
 
   .filters {
@@ -1265,19 +1272,14 @@ const collectionSchema = {
   }
 
   .results-toolbar {
-    min-height: 32px;
     margin-bottom: 18px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 20px;
   }
 
-  .results-toolbar > p {
-    margin: 0;
-    color: var(--muted);
-    font-size: .78rem;
-    white-space: nowrap;
+  .results-toolbar:not(:has(.active-filters button)) {
+    display: none;
   }
 
   .active-filters {
