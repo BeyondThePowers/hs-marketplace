@@ -204,13 +204,16 @@ const huntSchema = [{
       )}
 
       <nav class="detail-nav" aria-label="Hunt page sections">
-        <div class="detail-wide">
-          <a href="#overview">Overview</a>
-          <a href="#experience">The hunt</a>
-          {(accommodations.length > 0 || arrangedAccommodations.length > 0) && <a href="#lodging">Lodging</a>}
-          <a href="#travel">Travel</a>
-          <a href="#package">Package</a>
-          <a href="#terms">Terms</a>
+        <div class="detail-nav-inner detail-wide">
+          <span class="detail-nav-label">On this page</span>
+          <div class="detail-nav-links">
+            <a href="#overview" aria-current="location">Overview</a>
+            <a href="#experience">The hunt</a>
+            {(accommodations.length > 0 || arrangedAccommodations.length > 0) && <a href="#lodging">Lodging</a>}
+            <a href="#travel">Travel</a>
+            <a href="#package">Package</a>
+            <a href="#terms">Terms</a>
+          </div>
         </div>
       </nav>
 
@@ -600,6 +603,26 @@ const huntSchema = [{
       if (event.key === 'ArrowLeft') moveGallery(-1);
       if (event.key === 'ArrowRight') moveGallery(1);
     });
+  }
+
+  const sectionLinks = [...document.querySelectorAll<HTMLAnchorElement>('.detail-nav-links a')];
+  const observedSections = sectionLinks
+    .map((link) => document.querySelector<HTMLElement>(link.hash))
+    .filter((section): section is HTMLElement => Boolean(section));
+  if (sectionLinks.length > 0 && observedSections.length > 0) {
+    const setCurrentSection = (id: string) => {
+      sectionLinks.forEach((link) => {
+        if (link.hash === `#${id}`) link.setAttribute('aria-current', 'location');
+        else link.removeAttribute('aria-current');
+      });
+    };
+    const sectionObserver = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+      if (visible?.target.id) setCurrentSection(visible.target.id);
+    }, { rootMargin: '-18% 0px -62% 0px', threshold: [0, .15, .4] });
+    observedSections.forEach((section) => sectionObserver.observe(section));
   }
 </script>
 
@@ -1291,33 +1314,61 @@ const huntSchema = [{
   .detail-nav {
     position: sticky;
     z-index: 8;
-    top: 0;
-    margin-top: 28px;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    background: rgba(247,247,244,.94);
-    backdrop-filter: blur(14px);
+    top: 14px;
+    margin-top: 24px;
   }
 
-  .detail-nav > div {
+  .detail-nav-inner {
+    min-height: 60px;
+    padding: 7px 9px 7px 20px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+    border: 1px solid color-mix(in srgb, var(--border) 88%, #fff);
+    border-radius: 14px;
+    background: rgba(255,255,253,.94);
+    box-shadow: 0 12px 38px rgba(18,27,21,.09);
+    backdrop-filter: blur(16px);
+  }
+
+  .detail-nav-label {
+    padding-right: 20px;
+    border-right: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .66rem;
+    font-weight: 760;
+    letter-spacing: .095em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .detail-nav-links {
     display: flex;
-    gap: 30px;
+    gap: 3px;
     overflow-x: auto;
     scrollbar-width: none;
   }
 
   .detail-nav a {
-    padding: 17px 0 15px;
-    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    border-radius: 8px;
     color: #4f5a52;
     font-size: .78rem;
     font-weight: 720;
     white-space: nowrap;
+    transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
   }
 
   .detail-nav a:hover {
-    border-bottom-color: var(--accent);
+    background: #f0f1ec;
     color: var(--foreground);
+  }
+
+  .detail-nav a[aria-current='location'] {
+    background: var(--foreground);
+    color: #fff;
+    box-shadow: 0 5px 14px rgba(20,31,24,.16);
   }
 
   .detail-layout {
@@ -1597,10 +1648,27 @@ const huntSchema = [{
 
     .detail-nav {
       margin-top: 18px;
+      top: 8px;
     }
 
-    .detail-nav > div {
-      gap: 24px;
+    .detail-nav-inner {
+      width: calc(100% - 24px);
+      min-height: 52px;
+      padding: 6px;
+      display: block;
+      border-radius: 12px;
+    }
+
+    .detail-nav-label {
+      display: none;
+    }
+
+    .detail-nav-links {
+      gap: 2px;
+    }
+
+    .detail-nav a {
+      padding: 10px 13px;
     }
 
     .detail-layout {
