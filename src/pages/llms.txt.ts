@@ -1,14 +1,15 @@
 import type { APIRoute } from 'astro';
 import { loadCatalogSnapshot } from '../lib/catalog-build';
 import { publicSlug } from '../lib/public-slugs';
+import { destinationSlug, huntDestinations } from '../lib/hunt-destinations';
 
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
   const catalog = await loadCatalogSnapshot();
   const destinations = [...new Map(catalog.hunts
-    .filter((hunt) => hunt.region && hunt.country)
-    .map((hunt) => [`${hunt.region}|${hunt.country}`, { region: hunt.region!, country: hunt.country! }])).values()];
+    .flatMap((hunt) => huntDestinations(hunt.destinations))
+    .map((destination) => [`${destination.country.key}:${destination.region.key}`, destination])).values()];
   const species = [...new Set(catalog.hunts.flatMap((hunt) => [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])]))].sort();
   const absolute = (path: string) => new URL(path, site).toString();
   const lines = [
@@ -23,7 +24,7 @@ export const GET: APIRoute = async ({ site }) => {
     '',
     '## Destinations',
     '',
-    ...destinations.map(({ region, country }) => `- [Hunting in ${region}, ${country}](${absolute(`/destinations/${publicSlug(`${region}-${country}`)}`)})`),
+    ...destinations.map((destination) => `- [Hunting in ${destination.region.name}, ${destination.country.name}](${absolute(`/destinations/${destinationSlug(destination)}`)})`),
     '',
     '## Species',
     '',

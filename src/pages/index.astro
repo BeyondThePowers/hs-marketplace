@@ -3,6 +3,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import HuntCard from '../components/HuntCard.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
 import { speciesKey, speciesTaxonomyFor, type SpeciesTaxonomy } from '../data/species-taxonomy';
+import { destinationFacetKey, huntDestinations } from '../lib/hunt-destinations';
+import { createCatalogSearchDocument, type SearchVocabularyTerm } from '../lib/catalog-search';
 
 export const prerender = true;
 
@@ -11,16 +13,28 @@ const allHunts = catalog.hunts;
 const allMedia = catalog.huntMedia;
 const outfitters = catalog.outfitters;
 
-const countries = [...new Set(allHunts.map((hunt) => hunt.country).filter(Boolean))].sort();
+const destinationsByHunt = new Map(allHunts.map((hunt) => [hunt.id, huntDestinations(hunt.destinations)]));
+const allDestinations = [...destinationsByHunt.values()].flat();
 const speciesOptions = [...new Set(allHunts.flatMap((hunt) => [
   ...(hunt.primary_species ?? []),
   ...(hunt.secondary_species ?? []),
 ]))].sort();
-const regions = [...new Set(allHunts.map((hunt) => hunt.region).filter(Boolean))].sort();
 const tripTypes = [...new Set(allHunts.map((hunt) => hunt.trip_type).filter(Boolean))].sort();
 const record = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const records = (value: unknown): Array<Record<string, unknown>> => Array.isArray(value) ? value.filter((item) => record(item)).map((item) => item as Record<string, unknown>) : [];
-const humanize = (value: unknown) => String(value ?? '').replaceAll('-', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const stringLeaves = (value: unknown): string[] => {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(stringLeaves);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(stringLeaves);
+  return [];
+};
+const humanize = (value: unknown) => String(value ?? '')
+  .replace(/([a-z])([A-Z])/g, '$1 $2')
+  .replaceAll('-', ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const taxonomyRefs = (value: unknown) => records(value)
+  .map((item) => ({ key: String(item.key ?? ''), name: String(item.name ?? item.key ?? '') }))
+  .filter((item) => item.key && item.name);
 const taxonomyNames = (value: unknown) => records(value)
   .map((method) => String(method.name ?? method.key ?? ''))
   .filter(Boolean);
@@ -34,10 +48,20 @@ const equipmentOptions = [...new Set(allHunts.flatMap(huntEquipment))].sort();
 const techniqueOptions = [...new Set(allHunts.flatMap(huntTechniques))].sort();
 const terrainOptions = [...new Set(allHunts.flatMap(huntTerrain))].sort();
 const accessOptions = [...new Set(allHunts.flatMap(huntAccess))].sort();
-const destinationGroups = countries.map((country) => ({
-  country,
-  regions: [...new Set(allHunts.filter((hunt) => hunt.country === country).map((hunt) => hunt.region).filter(Boolean))].sort(),
-}));
+const destinationGroups = Object.values(allDestinations.reduce<Record<string, {
+  country: { key: string; name: string };
+  regions: Array<{ key: string; name: string; facetKey: string }>;
+}>>((groups, destination) => {
+  groups[destination.country.key] ??= { country: destination.country, regions: [] };
+  if (!groups[destination.country.key].regions.some((region) => region.key === destination.region.key)) {
+    groups[destination.country.key].regions.push({
+      ...destination.region,
+      facetKey: destinationFacetKey(destination),
+    });
+  }
+  return groups;
+}, {})).sort((left, right) => left.country.name.localeCompare(right.country.name));
+destinationGroups.forEach((group) => group.regions.sort((left, right) => left.name.localeCompare(right.name)));
 const publishedSpeciesTaxonomy = new Map<string, SpeciesTaxonomy>();
 for (const hunt of allHunts) {
   const classification = record(hunt.classification);
@@ -101,16 +125,74 @@ const formatPrice = (amount: number | null, currency: string | null) => {
   }).format(amount)}`;
 };
 
+const lodgeByRecordId = new Map((catalog.lodges ?? []).map((lodge) => [lodge.id, lodge]));
+const lodgeSearchDetailsByHunt = new Map<string, string[]>();
+for (const relation of catalog.huntLodges ?? []) {
+  if (!relation.hunt_id) continue;
+  const lodge = relation.lodge_record_id ? lodgeByRecordId.get(relation.lodge_record_id) : undefined;
+  const details = [
+    relation.region_name,
+    relation.summary,
+    relation.transfer_notes,
+    lodge?.name,
+    lodge?.summary,
+    lodge?.classification,
+    lodge?.atmosphere_line,
+    ...stringLeaves(lodge?.highlights),
+  ].filter((value): value is string => Boolean(value));
+  lodgeSearchDetailsByHunt.set(relation.hunt_id, [...(lodgeSearchDetailsByHunt.get(relation.hunt_id) ?? []), ...details]);
+}
+
 const featuredImage = imageUrl(allHunts[0]?.id ?? null);
-const searchData = allHunts.map((hunt) => ({
+const searchData = allHunts.map((hunt) => {
+  const classification = record(hunt.classification);
+  const destinations = destinationsByHunt.get(hunt.id) ?? [];
+  const speciesTerms = [
+    ...taxonomyRefs(classification?.primarySpecies),
+    ...taxonomyRefs(classification?.secondarySpecies),
+  ];
+  const fallbackSpeciesTerms = [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])]
+    .filter((name) => !speciesTerms.some((term) => term.name === name))
+    .map((name) => ({ key: speciesKey(name), name }));
+  const taxonomy: SearchVocabularyTerm[] = [
+    ...destinations.flatMap((destination) => [
+      { dimension: 'destination' as const, key: destination.country.key, name: destination.country.name },
+      { dimension: 'destination' as const, key: destination.region.key, name: destination.region.name },
+    ]),
+    ...speciesTerms.concat(fallbackSpeciesTerms).map((term) => ({ dimension: 'species' as const, ...term })),
+    ...taxonomyRefs(classification?.equipment).map((term) => ({ dimension: 'equipment' as const, ...term })),
+    ...taxonomyRefs(classification?.techniques).map((term) => ({ dimension: 'technique' as const, ...term })),
+    ...huntTerrain(hunt).map((name) => ({ dimension: 'terrain' as const, key: speciesKey(name), name })),
+    ...taxonomyRefs(record(hunt.territory)?.accessMethods).map((term) => ({ dimension: 'access' as const, ...term })),
+    { dimension: 'tripType' as const, key: speciesKey(hunt.trip_type ?? ''), name: humanize(hunt.trip_type) },
+  ].filter((term) => term.key && term.name);
+  const accommodationDetails = records(hunt.accommodations).flatMap((item) => [
+    item.name,
+    item.classification,
+    item.summary,
+    item.transferNotes,
+    item.regionName,
+  ].filter((value): value is string => typeof value === 'string' && Boolean(value)));
+  return {
   id: hunt.listing_id,
   sourceId: hunt.source_id,
-  search: [hunt.title, hunt.summary, hunt.outfitter_name, hunt.country, hunt.region, ...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? []), ...huntEquipment(hunt), ...huntTechniques(hunt), ...huntTerrain(hunt), ...huntAccess(hunt)]
-    .filter(Boolean)
-    .join(' ')
-    .toLocaleLowerCase(),
-  country: hunt.country ?? '',
-  region: hunt.region ?? '',
+  search: createCatalogSearchDocument({
+    title: [hunt.title ?? ''],
+    outfitter: [hunt.outfitter_name ?? ''],
+    taxonomy,
+    summary: [hunt.summary ?? ''],
+    details: [
+      ...stringLeaves(hunt.travel),
+      ...stringLeaves(record(hunt.editorial)?.highlights),
+      ...stringLeaves(hunt.inclusions),
+      ...accommodationDetails,
+      ...(hunt.id ? lodgeSearchDetailsByHunt.get(hunt.id) ?? [] : []),
+    ],
+  }),
+  destinations: (destinationsByHunt.get(hunt.id) ?? []).map((destination) => ({
+    countryKey: destination.country.key,
+    regionKey: destinationFacetKey(destination),
+  })),
   species: [...(hunt.primary_species ?? []), ...(hunt.secondary_species ?? [])],
   tripType: hunt.trip_type ?? '',
   equipment: huntEquipment(hunt),
@@ -119,7 +201,8 @@ const searchData = allHunts.map((hunt) => ({
   access: huntAccess(hunt),
   price: hunt.starting_price,
   huntingDays: Number(record(hunt.duration_and_party ?? hunt.duration)?.huntingDays ?? 0),
-}));
+  };
+});
 const collectionSchema = {
   '@context': 'https://schema.org',
   '@type': 'CollectionPage',
@@ -174,23 +257,23 @@ const collectionSchema = {
       <aside class="filter-panel" data-filter-panel aria-label="Filter hunts">
         <form class="filters" method="get" action="/#hunts">
           <div class="filter-header"><div><p>Refine results</p><strong>Find the right hunt</strong></div><button type="button" data-filter-close aria-label="Close filters">×</button></div>
-          <label class="search-field"><span>Search hunts</span><input name="q" type="search" placeholder="Species, region, or outfitter" autocomplete="off" /></label>
+          <label class="search-field"><span>Search by keyword</span><input name="q" type="search" placeholder="Hunt name, outfitter, or keyword" autocomplete="off" /></label>
           <details open>
             <summary>Destination</summary>
             <div class="filter-group facet-options">
               {destinationGroups.map((group) => (
                 <div class="destination-group">
                   <label class="check-option destination-parent" data-facet-option>
-                    <input type="checkbox" name="country" value={group.country} data-facet="destination" data-label={group.country} />
-                    <span>{group.country}</span>
-                    <small data-facet-count data-facet="destination" data-value={group.country}>{allHunts.filter((hunt) => hunt.country === group.country).length}</small>
+                    <input type="checkbox" name="country" value={group.country.key} data-facet="destination" data-label={group.country.name} />
+                    <span>{group.country.name}</span>
+                    <small data-facet-count data-facet="destination" data-value={group.country.key}>{allHunts.filter((hunt) => (destinationsByHunt.get(hunt.id) ?? []).some((destination) => destination.country.key === group.country.key)).length}</small>
                   </label>
                   <div class="destination-children">
                     {group.regions.map((region) => (
                       <label class="check-option" data-facet-option>
-                        <input type="checkbox" name="region" value={region} data-facet="destination" data-label={region} />
-                        <span>{region}</span>
-                        <small data-facet-count data-facet="destination" data-value={region}>{allHunts.filter((hunt) => hunt.region === region).length}</small>
+                        <input type="checkbox" name="region" value={region.facetKey} data-facet="destination" data-label={region.name} />
+                        <span>{region.name}</span>
+                        <small data-facet-count data-facet="destination" data-value={region.facetKey}>{allHunts.filter((hunt) => (destinationsByHunt.get(hunt.id) ?? []).some((destination) => destinationFacetKey(destination) === region.facetKey)).length}</small>
                       </label>
                     ))}
                   </div>
@@ -304,6 +387,7 @@ const collectionSchema = {
 
       <div class="results-column">
         <div class="results-toolbar"><div class="active-filters" data-active-filters></div></div>
+        <p class="search-assistance" data-search-assistance hidden></p>
         <div class="hunt-grid">
           {allHunts.map((hunt, index) => <HuntCard hunt={hunt} media={hunt.id ? mediaByHunt.get(hunt.id) : undefined} mediaCount={hunt.id ? mediaCountByHunt.get(hunt.id) : 0} eager={index < 2} />)}
         </div>
@@ -342,12 +426,14 @@ const collectionSchema = {
     type FacetRecord,
     type FacetState,
   } from '../lib/facet-engine';
+  import { searchCatalogDocument } from '../lib/catalog-search';
 
   const form = document.querySelector<HTMLFormElement>('.filters');
   const dataElement = document.querySelector<HTMLScriptElement>('#catalog-search-data');
   const cards = new Map(
     [...document.querySelectorAll<HTMLElement>('[data-listing-id]')].map((card) => [card.dataset.listingId, card])
   );
+  const huntGrid = document.querySelector<HTMLElement>('.hunt-grid');
   const count = document.querySelector<HTMLElement>('[data-result-count]');
   const resultLabel = document.querySelector<HTMLElement>('[data-result-label]');
   const draftCount = document.querySelector<HTMLElement>('[data-draft-count]');
@@ -358,6 +444,7 @@ const collectionSchema = {
   const closeButton = document.querySelector<HTMLButtonElement>('[data-filter-close]');
   const activeFilters = document.querySelector<HTMLElement>('[data-active-filters]');
   const activeCount = document.querySelector<HTMLElement>('[data-active-count]');
+  const searchAssistance = document.querySelector<HTMLElement>('[data-search-assistance]');
   const mobileQuery = window.matchMedia('(max-width: 900px)');
 
   if (form && dataElement) {
@@ -465,6 +552,28 @@ const collectionSchema = {
       const matching = filterFacetRecords(records, state, inactiveSources);
       const matchingIds = new Set(matching.map((record) => record.id));
       for (const [id, card] of cards) card.hidden = !matchingIds.has(id ?? '');
+      for (const record of matching) {
+        const card = cards.get(record.id);
+        if (card) huntGrid?.append(card);
+      }
+      if (searchAssistance) {
+        const corrections = new Map<string, Set<string>>();
+        for (const record of matching) {
+          for (const correction of searchCatalogDocument(record.search, state.q).fuzzyCorrections) {
+            const candidates = corrections.get(correction.query) ?? new Set<string>();
+            candidates.add(correction.candidate);
+            corrections.set(correction.query, candidates);
+          }
+        }
+        const unambiguous = [...corrections].filter(([, candidates]) => candidates.size === 1)
+          .map(([query, candidates]) => `“${query}” as “${[...candidates][0]}”`);
+        searchAssistance.hidden = corrections.size === 0;
+        searchAssistance.textContent = corrections.size === 0
+          ? ''
+          : unambiguous.length === corrections.size
+            ? `Close spelling matches included: ${unambiguous.join(', ')}.`
+            : 'Close spelling matches were included. Refine the query if these results are not relevant.';
+      }
       if (count) count.textContent = String(matching.length);
       if (resultLabel) resultLabel.textContent = matching.length === 1 ? 'hunt' : 'hunts';
       if (empty) empty.hidden = matching.length !== 0;
@@ -1297,6 +1406,16 @@ const collectionSchema = {
     color: #4a554d;
     font-size: .7rem;
     cursor: pointer;
+  }
+
+  .search-assistance {
+    margin: -4px 0 18px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--gold);
+    background: #f2efe7;
+    color: #596159;
+    font-size: .78rem;
+    line-height: 1.5;
   }
 
   .hunt-grid {

@@ -1,5 +1,6 @@
 ---
 import { mediaUrl, type CatalogHunt, type CatalogHuntMedia } from '../lib/catalog-build';
+import { destinationLabel, huntDestinations } from '../lib/hunt-destinations';
 
 interface Props {
   hunt: CatalogHunt;
@@ -20,8 +21,8 @@ const taxonomyNames = (value: unknown) => Array.isArray(value)
   ? value.map((item) => record(item)).filter(Boolean).map((item) => String(item?.name ?? item?.key ?? '')).filter(Boolean)
   : [];
 const equipmentTypes = taxonomyNames(classification?.equipment);
-const compatibilityMethods = taxonomyNames(classification?.methods);
-const cardEquipment = equipmentTypes.length > 0 ? equipmentTypes : compatibilityMethods;
+const cardEquipment = equipmentTypes;
+const locationLabel = destinationLabel(huntDestinations(hunt.destinations));
 const price = hunt.starting_price === null
   ? 'Contact for price'
   : new Intl.NumberFormat('en-US', {
@@ -41,7 +42,7 @@ const tripType = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
     <span class="image-shade"></span>
     <span class="trip-type">{tripType}</span>
     {mediaCount > 1 && <span class="photo-count" aria-label={`${mediaCount} photos`}>▣ {mediaCount}</span>}
-    <span class="image-location">{[hunt.region, hunt.country].filter(Boolean).join(', ')}</span>
+    <span class="image-location">{locationLabel}</span>
   </a>
   <div class="card-body">
     <div class="card-heading">

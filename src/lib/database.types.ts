@@ -179,6 +179,63 @@ export type Database = {
           },
         ]
       }
+      marketplace_hunt_destinations: {
+        Row: {
+          coordinates: Json | null
+          country_key: string
+          country_name: string
+          created_at: string
+          hunt_id: string
+          id: string
+          privacy_mode: string
+          region_key: string
+          region_name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          coordinates?: Json | null
+          country_key: string
+          country_name: string
+          created_at?: string
+          hunt_id: string
+          id?: string
+          privacy_mode: string
+          region_key: string
+          region_name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          coordinates?: Json | null
+          country_key?: string
+          country_name?: string
+          created_at?: string
+          hunt_id?: string
+          id?: string
+          privacy_mode?: string
+          region_key?: string
+          region_name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_hunt_destinations_hunt_id_fkey"
+            columns: ["hunt_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_hunts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_hunt_destinations_hunt_id_fkey"
+            columns: ["hunt_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_public_hunts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_hunts: {
         Row: {
           accommodations: Json
@@ -187,7 +244,6 @@ export type Database = {
           content_hash: string
           content_status: string
           content_updated_at: string
-          country: string
           created_at: string
           currency: string
           duration: Json
@@ -201,7 +257,6 @@ export type Database = {
           itinerary: Json
           last_seen_at: string | null
           listing_id: string
-          location: Json
           methods_and_guiding: Json
           moderation_changed_at: string | null
           moderation_changed_by: string | null
@@ -212,7 +267,6 @@ export type Database = {
           primary_species: string[]
           published: boolean
           raw_content: Json | null
-          region: string
           season: Json
           season_and_availability: Json
           secondary_species: string[]
@@ -237,7 +291,6 @@ export type Database = {
           content_hash: string
           content_status?: string
           content_updated_at: string
-          country: string
           created_at?: string
           currency?: string
           duration?: Json
@@ -251,7 +304,6 @@ export type Database = {
           itinerary?: Json
           last_seen_at?: string | null
           listing_id: string
-          location?: Json
           methods_and_guiding?: Json
           moderation_changed_at?: string | null
           moderation_changed_by?: string | null
@@ -262,7 +314,6 @@ export type Database = {
           primary_species?: string[]
           published?: boolean
           raw_content?: Json | null
-          region: string
           season?: Json
           season_and_availability?: Json
           secondary_species?: string[]
@@ -287,7 +338,6 @@ export type Database = {
           content_hash?: string
           content_status?: string
           content_updated_at?: string
-          country?: string
           created_at?: string
           currency?: string
           duration?: Json
@@ -301,7 +351,6 @@ export type Database = {
           itinerary?: Json
           last_seen_at?: string | null
           listing_id?: string
-          location?: Json
           methods_and_guiding?: Json
           moderation_changed_at?: string | null
           moderation_changed_by?: string | null
@@ -312,7 +361,6 @@ export type Database = {
           primary_species?: string[]
           published?: boolean
           raw_content?: Json | null
-          region?: string
           season?: Json
           season_and_availability?: Json
           secondary_species?: string[]
@@ -1057,7 +1105,7 @@ export type Database = {
           accommodations: Json | null
           classification: Json | null
           content_updated_at: string | null
-          country: string | null
+          destinations: Json | null
           currency: string | null
           duration: Json | null
           duration_and_party: Json | null
@@ -1069,7 +1117,6 @@ export type Database = {
           inclusions: Json | null
           itinerary: Json | null
           listing_id: string | null
-          location: Json | null
           methods_and_guiding: Json | null
           optional_services: Json | null
           outfitter_inquiry: Json | null
@@ -1078,7 +1125,6 @@ export type Database = {
           outfitter_profile_url: string | null
           pricing: Json | null
           primary_species: string[] | null
-          region: string | null
           season: Json | null
           season_and_availability: Json | null
           secondary_species: string[] | null

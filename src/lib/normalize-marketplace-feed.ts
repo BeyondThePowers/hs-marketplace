@@ -1,5 +1,5 @@
 import type { Json } from './database.types';
-import type { MarketplaceAnyContentFeed, MarketplaceContentFeed } from './marketplace-content-schema';
+import type { MarketplaceAnyContentFeed } from './marketplace-content-schema';
 import type { MarketplaceContentFeedV2 } from './content-contract-v2';
 
 export type NormalizedMedia = {
@@ -22,8 +22,7 @@ export type NormalizedHunt = {
   tripType: string;
   primarySpecies: string[];
   secondarySpecies: string[];
-  country: string;
-  region: string;
+  destinations: MarketplaceContentFeedV2['hunts'][number]['location']['destinations'];
   duration: Json;
   season: Json;
   startingPrice: number;
@@ -61,10 +60,6 @@ export type NormalizedFeed = {
   rawFeed: MarketplaceAnyContentFeed;
 };
 
-function isV2(feed: MarketplaceAnyContentFeed): feed is MarketplaceContentFeedV2 {
-  return feed.schemaVersion === '2.0';
-}
-
 function v2Sections(hunt: MarketplaceContentFeedV2['hunts'][number]): Json[] {
   return [
     { type: 'overview', heading: 'Overview', body: hunt.editorial.description },
@@ -82,34 +77,7 @@ function v2Sections(hunt: MarketplaceContentFeedV2['hunts'][number]): Json[] {
   ] as Json[];
 }
 
-function normalizeV1(feed: MarketplaceContentFeed): NormalizedFeed {
-  return {
-    schemaVersion: feed.schemaVersion,
-    generatedAt: feed.generatedAt,
-    source: feed.source,
-    outfitter: {
-      ...feed.outfitter,
-      logo: feed.outfitter.logo as Json,
-      profileImage: feed.outfitter.profileImage as Json,
-      contact: feed.outfitter.contact as Json,
-      inquiry: { mode: 'source-page', inquiryPageUrl: feed.outfitter.inquiryUrl },
-      rawContent: feed.outfitter as unknown as Json,
-    },
-    dataPolicy: feed.dataPolicy as unknown as Json,
-    hunts: feed.hunts.map((hunt) => ({
-      ...hunt,
-      duration: hunt.duration as Json,
-      season: hunt.season as Json,
-      sections: hunt.sections as unknown as Json[],
-      media: [hunt.featuredImage, ...hunt.gallery],
-      rawContent: hunt as unknown as Json,
-    })),
-    lodges: [],
-    rawFeed: feed,
-  };
-}
-
-function normalizeV2(feed: MarketplaceContentFeedV2): NormalizedFeed {
+function normalizeFeed(feed: MarketplaceContentFeedV2): NormalizedFeed {
   return {
     schemaVersion: feed.schemaVersion,
     generatedAt: feed.generatedAt,
@@ -146,8 +114,7 @@ function normalizeV2(feed: MarketplaceContentFeedV2): NormalizedFeed {
         tripType: hunt.classification.tripType,
         primarySpecies: hunt.classification.primarySpecies.map((species) => species.name),
         secondarySpecies: hunt.classification.secondarySpecies.map((species) => species.name),
-        country: hunt.location.country.name,
-        region: hunt.location.region.name,
+        destinations: hunt.location.destinations,
         duration: hunt.durationAndParty as unknown as Json,
         season: hunt.seasonAndAvailability as unknown as Json,
         startingPrice: price.amount,
@@ -164,5 +131,5 @@ function normalizeV2(feed: MarketplaceContentFeedV2): NormalizedFeed {
 }
 
 export function normalizeMarketplaceFeed(feed: MarketplaceAnyContentFeed): NormalizedFeed {
-  return isV2(feed) ? normalizeV2(feed) : normalizeV1(feed);
+  return normalizeFeed(feed);
 }

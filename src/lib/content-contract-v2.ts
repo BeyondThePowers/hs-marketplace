@@ -185,18 +185,17 @@ export const PublicHuntSchema = z.object({
     secondarySpecies: z.array(PublicSpeciesTaxonomyRefSchema).default([]),
     equipment: z.array(PublicTaxonomyRefSchema).default([]),
     techniques: z.array(PublicTaxonomyRefSchema).default([]),
-    methods: z.array(PublicTaxonomyRefSchema).min(1),
   }),
   location: z.object({
-    country: PublicTaxonomyRefSchema,
-    region: PublicTaxonomyRefSchema,
-    privacyMode: z.enum(['exact', 'approximate', 'hidden']).default('approximate'),
-    coordinates: z
-      .object({
+    destinations: z.array(z.object({
+      country: PublicTaxonomyRefSchema,
+      region: PublicTaxonomyRefSchema,
+      privacyMode: z.enum(['exact', 'approximate', 'hidden']).default('approximate'),
+      coordinates: z.object({
         latitude: z.number().min(-90).max(90),
         longitude: z.number().min(-180).max(180),
-      })
-      .optional(),
+      }).optional(),
+    })).min(1),
   }),
   durationAndParty: z.object({
     nights: z.number().int().nonnegative(),
@@ -355,10 +354,22 @@ export const MarketplaceContentFeedV2Schema = z
     }
 
     for (const [index, hunt] of feed.hunts.entries()) {
+      const destinationKeys = new Set<string>();
       if (listingIds.has(hunt.listingId)) {
         context.addIssue({ code: z.ZodIssueCode.custom, path: ['hunts', index, 'listingId'], message: 'duplicate listingId' });
       }
       listingIds.add(hunt.listingId);
+      for (const [destinationIndex, destination] of hunt.location.destinations.entries()) {
+        const destinationKey = `${destination.country.key}:${destination.region.key}`;
+        if (destinationKeys.has(destinationKey)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['hunts', index, 'location', 'destinations', destinationIndex],
+            message: 'duplicate country and region destination',
+          });
+        }
+        destinationKeys.add(destinationKey);
+      }
       for (const accommodation of hunt.accommodations) {
         if (accommodation.type === 'lodge' && !lodgeIds.has(accommodation.lodgeId)) {
           context.addIssue({

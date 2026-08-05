@@ -172,10 +172,6 @@ async function syncLodges(
   sourceId: string,
   now: string
 ) {
-  if (feed.schemaVersion !== '2.0') {
-    return { lodgesChanged: 0, lodgeMediaChanged: 0, lodgeRecordsByPublicId: new Map<string, string>() };
-  }
-
   const { data: existing, error: existingError } = await supabase
     .from('marketplace_lodges')
     .select('id, lodge_id, content_hash, source_active, orphaned_at')
@@ -244,6 +240,44 @@ async function syncLodges(
   }
 
   return { lodgesChanged, lodgeMediaChanged, lodgeRecordsByPublicId };
+}
+
+async function syncHuntDestinations(
+  supabase: UntypedClient,
+  huntId: string,
+  destinations: NormalizedFeed['hunts'][number]['destinations'],
+  now: string
+) {
+  const { data: existing, error: existingError } = await supabase
+    .from('marketplace_hunt_destinations')
+    .select('id, country_key, region_key')
+    .eq('hunt_id', huntId);
+  if (existingError) throw existingError;
+
+  const incomingKeys = new Set(destinations.map(({ country, region }) => `${country.key}:${region.key}`));
+  const obsoleteIds = (existing ?? [])
+    .filter((destination: any) => !incomingKeys.has(`${destination.country_key}:${destination.region_key}`))
+    .map((destination: any) => destination.id);
+  if (obsoleteIds.length > 0) {
+    const { error } = await supabase.from('marketplace_hunt_destinations').delete().in('id', obsoleteIds);
+    if (error) throw error;
+  }
+
+  const rows = destinations.map((destination, sortOrder) => ({
+    hunt_id: huntId,
+    country_key: destination.country.key,
+    country_name: destination.country.name,
+    region_key: destination.region.key,
+    region_name: destination.region.name,
+    privacy_mode: destination.privacyMode,
+    coordinates: destination.coordinates ?? null,
+    sort_order: sortOrder,
+    updated_at: now,
+  }));
+  const { error } = await supabase
+    .from('marketplace_hunt_destinations')
+    .upsert(rows, { onConflict: 'hunt_id,country_key,region_key' });
+  if (error) throw error;
 }
 
 async function syncHuntLodgeRelations(
@@ -410,7 +444,6 @@ async function ingestFeed(
     const v2Fields = feed.schemaVersion === '2.0'
       ? {
           classification: raw.classification,
-          location: raw.location,
           duration_and_party: raw.durationAndParty,
           season_and_availability: raw.seasonAndAvailability,
           methods_and_guiding: raw.methodsAndGuiding,
@@ -442,8 +475,6 @@ async function ingestFeed(
           trip_type: hunt.tripType,
           primary_species: hunt.primarySpecies,
           secondary_species: hunt.secondarySpecies,
-          country: hunt.country,
-          region: hunt.region,
           duration: hunt.duration,
           season: hunt.season,
           starting_price: hunt.startingPrice,
@@ -463,16 +494,15 @@ async function ingestFeed(
       .select('id')
       .single();
     if (error) throw error;
+    await syncHuntDestinations(untyped, stored.id, hunt.destinations, now);
     mediaChanged += await syncMedia(supabase, stored.id, hunt, now);
-    if (feed.schemaVersion === '2.0') {
-      await syncHuntLodgeRelations(
-        untyped,
-        stored.id,
-        hunt,
-        lodgeResult.lodgeRecordsByPublicId,
-        now
-      );
-    }
+    await syncHuntLodgeRelations(
+      untyped,
+      stored.id,
+      hunt,
+      lodgeResult.lodgeRecordsByPublicId,
+      now
+    );
   }
 
   const incomingListingIds = new Set(feed.hunts.map((hunt) => hunt.listingId));

@@ -25,8 +25,8 @@ array and must not be inferred from the species, region, or package title.
 
 ## Species browsing hierarchy
 
-Every published primary and secondary species should include two optional,
-backward-compatible taxonomy references in Feed V2:
+Every published primary and secondary species includes two taxonomy references
+in Feed V2:
 
 - `pursuitGroup`: the broad browsing family, such as `big-game`,
   `game-birds`, `fishing`, or `small-game`.
@@ -40,9 +40,8 @@ silently act as filters. A future parent selection must be exposed explicitly
 as an option such as "All waterfowl" with a stable URL parameter.
 
 Publishers own this classification through their site taxonomy configuration.
-The marketplace may maintain a compatibility registry for feeds published
-before the metadata existed, but must not infer a group from prose or a hunt
-title. Unclassified values appear under Other species rather than disappearing.
+The marketplace must not infer a group from prose or a hunt title. Unclassified
+values appear under Other species rather than disappearing.
 
 ## Public feed mapping
 
@@ -53,10 +52,9 @@ Feed V2 exposes the same concepts as:
 - `territory.terrain`
 - `territory.accessMethods`
 
-`classification.methods` remains temporarily as the ordered union of equipment
-and techniques so existing V2 consumers continue to operate. New consumers
-must not use it for facets. It can be removed only in a future major feed
-version after every registered consumer has migrated.
+There is no generic `classification.methods` field. Combining equipment and
+technique destroys facet meaning, so publishers and consumers use only the
+explicit dimensions.
 
 ## Marketplace behavior
 
@@ -90,9 +88,8 @@ The initial vocabulary includes:
 This vocabulary is extensible. Additions require a clear category, a distinct
 hunter decision value, and evidence in the source record.
 
-## Migration rule
+## Authoring rule
 
-Older records may still contain `huntingMethod`. Marketing builds accept it
-only as a compatibility input. Marketplace-enabled records are validated to
-contain explicit equipment or techniques, and current JJ, ABH, and canonical
-template records have been migrated manually.
+`huntingMethod` is not accepted. Marketplace-enabled records must contain
+explicit equipment or techniques. Current JJ, ABH, and canonical template
+records have been migrated manually.

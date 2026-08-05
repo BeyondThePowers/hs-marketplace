@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "promptVersion": "taxonomy-aliases-v1",
+  "canonical": {
+    "dimension": "species",
+    "key": "red-stag",
+    "name": "Red Stag",
+    "definition": "Cervus elaphus as described in the marketplace species taxonomy."
+  },
+  "candidates": [
+    {
+      "value": "red deer",
+      "relation": "equivalent",
+      "locale": "en",
+      "confidence": "high",
+      "reason": "Established common name for the same species."
+    },
+    {
+      "value": "deer",
+      "relation": "broader",
+      "locale": "en",
+      "confidence": "high",
+      "reason": "A broader group rather than the same species."
+    }
+  ],
+  "rejectedRelatedTerms": [
+    {
+      "value": "deer hunting",
+      "relation": "related",
+      "reason": "Describes an activity rather than the species."
+    }
+  ]
+}

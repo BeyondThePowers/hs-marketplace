@@ -6,9 +6,8 @@ export type SpeciesMode = 'any' | 'all';
 export type FacetRecord = {
   id: string;
   sourceId: string;
-  search: string;
-  country: string;
-  region: string;
+  search: CatalogSearchDocument;
+  destinations: Array<{ countryKey: string; regionKey: string }>;
   species: string[];
   tripType: string;
   equipment: string[];
@@ -60,13 +59,12 @@ export const matchesFacetState = (
 ) => {
   if (inactiveSources.includes(record.sourceId)) return false;
 
-  const query = state.q.trim().toLocaleLowerCase();
-  if (query && !record.search.includes(query)) return false;
+  if (!searchCatalogDocument(record.search, state.q).matched) return false;
 
   if (omittedFacet !== 'destination') {
     const hasDestinationSelection = state.countries.length > 0 || state.regions.length > 0;
-    const matchesDestination =
-      state.countries.includes(record.country) || state.regions.includes(record.region);
+    const matchesDestination = record.destinations.some((destination) =>
+      state.countries.includes(destination.countryKey) || state.regions.includes(destination.regionKey));
     if (hasDestinationSelection && !matchesDestination) return false;
   }
 
@@ -92,7 +90,11 @@ export const filterFacetRecords = (
   records: FacetRecord[],
   state: FacetState,
   inactiveSources: string[] = [],
-) => records.filter((record) => matchesFacetState(record, state, inactiveSources));
+) => records
+  .map((record, index) => ({ record, index, match: searchCatalogDocument(record.search, state.q) }))
+  .filter(({ record, match }) => match.matched && matchesFacetState(record, { ...state, q: '' }, inactiveSources))
+  .sort((left, right) => state.q.trim() ? right.match.score - left.match.score || left.index - right.index : left.index - right.index)
+  .map(({ record }) => record);
 
 export const contextualFacetCount = (
   records: FacetRecord[],
@@ -102,7 +104,7 @@ export const contextualFacetCount = (
   inactiveSources: string[] = [],
 ) => records.filter((record) => {
   if (!matchesFacetState(record, state, inactiveSources, facet)) return false;
-  if (facet === 'destination') return record.country === value || record.region === value;
+  if (facet === 'destination') return record.destinations.some((destination) => destination.countryKey === value || destination.regionKey === value);
   if (facet === 'species') return record.species.includes(value);
   if (facet === 'tripType') return record.tripType === value;
   if (facet === 'equipment') return record.equipment.includes(value);
@@ -142,3 +144,4 @@ export const facetStateToParams = (state: FacetState) => {
   if (state.minDays) params.set('minDays', String(state.minDays));
   return params;
 };
+import { searchCatalogDocument, type CatalogSearchDocument } from './catalog-search.ts';

@@ -3,6 +3,7 @@ import HuntCard from '../../components/HuntCard.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
 import { publicSlug } from '../../lib/public-slugs';
+import { destinationLabel, huntDestinations } from '../../lib/hunt-destinations';
 
 export const prerender = true;
 
@@ -21,7 +22,7 @@ export async function getStaticPaths() {
 }
 
 const { name, cards } = Astro.props;
-const destinations = [...new Set(cards.map(({ hunt }) => [hunt.region, hunt.country].filter(Boolean).join(', ')))].sort();
+const destinations = [...new Set(cards.map(({ hunt }) => destinationLabel(huntDestinations(hunt.destinations))))].sort();
 const heroImage = mediaUrl(cards[0]?.media);
 const canonicalPath = `/species/${Astro.params.slug}`;
 const schema = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: `${name} hunts`, description: `Compare ${name} hunting packages from participating outfitters.`, mainEntity: { '@type': 'ItemList', numberOfItems: cards.length, itemListElement: cards.map(({ hunt }, index) => ({ '@type': 'ListItem', position: index + 1, name: hunt.title, url: new URL(`/hunts/${hunt.listing_id}`, Astro.site ?? Astro.url.origin).toString() })) } };

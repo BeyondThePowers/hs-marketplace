@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
 import { publicSlug } from '../../lib/public-slugs';
+import { destinationFacetKey, destinationLabel, destinationSlug, huntDestinations } from '../../lib/hunt-destinations';
 
 export const prerender = true;
 
@@ -10,6 +11,8 @@ export async function getStaticPaths() {
   return catalog.hunts
     .filter((hunt) => hunt.listing_id && hunt.id)
     .map((hunt) => {
+      const huntDestinationKeys = new Set(huntDestinations(hunt.destinations).map(destinationFacetKey));
+      const sharesDestination = (candidate: typeof hunt) => huntDestinations(candidate.destinations).some((destination) => huntDestinationKeys.has(destinationFacetKey(destination)));
       const relations = catalog.huntLodges.filter((relation) => relation.hunt_id === hunt.id);
       const lodgeIds = new Set(relations.map((relation) => relation.lodge_record_id));
       return {
@@ -24,13 +27,13 @@ export async function getStaticPaths() {
           })),
           relatedHunts: catalog.hunts
             .filter((candidate) => candidate.id !== hunt.id && (
-              candidate.region === hunt.region ||
+              sharesDestination(candidate) ||
               candidate.trip_type === hunt.trip_type ||
               (candidate.primary_species ?? []).some((species) => (hunt.primary_species ?? []).includes(species))
             ))
             .sort((a, b) => {
               const score = (candidate: typeof hunt) =>
-                Number(candidate.region === hunt.region) * 3 +
+                Number(sharesDestination(candidate)) * 3 +
                 Number(candidate.trip_type === hunt.trip_type) * 2 +
                 (candidate.primary_species ?? []).filter((species) => (hunt.primary_species ?? []).includes(species)).length;
               return score(b) - score(a);
@@ -46,6 +49,7 @@ export async function getStaticPaths() {
 }
 
 const { hunt, media, accommodations, relatedHunts } = Astro.props;
+const destinations = huntDestinations(hunt.destinations);
 const record = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const records = (value: unknown): Array<Record<string, unknown>> =>
@@ -83,8 +87,7 @@ const classification = record(hunt.classification);
 const taxonomyNames = (value: unknown) => records(value).map((item) => String(item.name ?? item.key ?? '')).filter(Boolean);
 const equipmentTaxonomy = taxonomyNames(classification?.equipment);
 const techniqueTaxonomy = taxonomyNames(classification?.techniques);
-const compatibilityMethods = taxonomyNames(classification?.methods);
-const displayedEquipment = equipmentTaxonomy.length > 0 ? equipmentTaxonomy : compatibilityMethods;
+const displayedEquipment = equipmentTaxonomy;
 const displayedTechniques = techniqueTaxonomy;
 const accessMethods = taxonomyNames(territory?.accessMethods);
 const durationLabel = duration
@@ -144,7 +147,7 @@ const huntSchema = [{
   url: canonicalUrl,
   category: tripTypeLabel,
   seller: { '@type': 'Organization', name: hunt.outfitter_name, url: hunt.outfitter_profile_url },
-  areaServed: { '@type': 'Place', name: [hunt.region, hunt.country].filter(Boolean).join(', ') },
+  areaServed: destinations.map((destination) => ({ '@type': 'Place', name: `${destination.region.name}, ${destination.country.name}` })),
   additionalProperty: [
     { '@type': 'PropertyValue', name: 'Primary species', value: (hunt.primary_species ?? []).join(', ') },
     { '@type': 'PropertyValue', name: 'Duration', value: durationLabel },
@@ -181,7 +184,7 @@ const huntSchema = [{
         <div class="shade"></div>
         <div class="container hero-inner">
           <a class="back" href="/#hunts">Back to all hunts</a>
-          <p class="location"><a href={`/destinations/${publicSlug(`${hunt.region}-${hunt.country}`)}`}>{[hunt.region, hunt.country].filter(Boolean).join(', ')}</a></p>
+          <p class="location">{destinations.map((destination, index) => <>{index > 0 && ', '}<a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>{index === destinations.length - 1 && `, ${destination.country.name}`}</>)}</p>
           <h1>{hunt.title}</h1>
           <p class="outfitter">With {hunt.outfitter_name}</p>
         </div>
@@ -461,7 +464,7 @@ const huntSchema = [{
                 {relatedHunts.map(({ hunt: related, media: relatedMedia }) => (
                   <a href={`/hunts/${related.listing_id}`}>
                     {relatedMedia && <img src={mediaUrl(relatedMedia) || ''} alt={relatedMedia.alt || related.title || ''} loading="lazy" />}
-                    <div><p>{[related.region, related.country].filter(Boolean).join(', ')}</p><h3>{related.title}</h3><strong>{formatPrice(related.starting_price, related.currency)}</strong></div>
+                    <div><p>{destinationLabel(huntDestinations(related.destinations))}</p><h3>{related.title}</h3><strong>{formatPrice(related.starting_price, related.currency)}</strong></div>
                   </a>
                 ))}
               </div>

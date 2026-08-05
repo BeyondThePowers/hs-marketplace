@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
+import { destinationLabel, huntDestinations } from '../../lib/hunt-destinations';
 
 export const prerender = true;
 
@@ -79,7 +80,7 @@ const schema = {
         <a class="hunt-card" href={`/hunts/${hunt.listing_id}`}>
           {hunt.id && firstMedia.get(hunt.id) && <img src={mediaUrl(firstMedia.get(hunt.id)) || ''} alt={firstMedia.get(hunt.id)?.alt || hunt.title || ''} loading="lazy" />}
           <div>
-            <p>{[hunt.region, hunt.country].filter(Boolean).join(', ')}</p>
+            <p>{destinationLabel(huntDestinations(hunt.destinations))}</p>
             <h3>{hunt.title}</h3>
             <span>{(hunt.primary_species ?? []).join(', ')}</span>
           </div>

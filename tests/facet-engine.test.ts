@@ -9,11 +9,21 @@ import {
   type FacetState,
 } from '../src/lib/facet-engine.ts';
 import { speciesTaxonomyFor } from '../src/data/species-taxonomy.ts';
+import { createCatalogSearchDocument } from '../src/lib/catalog-search.ts';
+
+const searchDocument = (values: { title: string; summary?: string; taxonomy?: Array<{ dimension: 'species' | 'destination'; key: string; name: string }> }) =>
+  createCatalogSearchDocument({
+    title: [values.title],
+    outfitter: [],
+    taxonomy: values.taxonomy ?? [],
+    summary: [values.summary ?? ''],
+    details: [],
+  });
 
 const records: FacetRecord[] = [
-  { id: 'duck', sourceId: 'a', search: 'duck dove argentina', country: 'Argentina', region: 'Santa Fe', species: ['Duck', 'Dove'], tripType: 'Combo', equipment: ['Shotgun'], techniques: ['Blind hunting', 'Decoying'], terrain: ['Wetlands'], access: ['Boat'], price: 3000, huntingDays: 5 },
-  { id: 'dove', sourceId: 'a', search: 'dove argentina', country: 'Argentina', region: 'Córdoba', species: ['Dove'], tripType: 'Wingshooting', equipment: ['Shotgun'], techniques: ['Pass shooting'], terrain: ['Agricultural fields'], access: ['4x4 vehicle'], price: 1800, huntingDays: 4 },
-  { id: 'elk', sourceId: 'b', search: 'elk united states', country: 'United States', region: 'Montana', species: ['Elk'], tripType: 'BigGame', equipment: ['Rifle', 'Bow'], techniques: ['Spot and stalk'], terrain: ['Alpine'], access: ['On foot'], price: 7000, huntingDays: 6 },
+  { id: 'duck', sourceId: 'a', search: searchDocument({ title: 'Duck Dove Argentina' }), destinations: [{ countryKey: 'argentina', regionKey: 'argentina:cordoba' }, { countryKey: 'argentina', regionKey: 'argentina:santa-fe' }], species: ['Duck', 'Dove'], tripType: 'Combo', equipment: ['Shotgun'], techniques: ['Blind hunting', 'Decoying'], terrain: ['Wetlands'], access: ['Boat'], price: 3000, huntingDays: 5 },
+  { id: 'dove', sourceId: 'a', search: searchDocument({ title: 'Dove Argentina' }), destinations: [{ countryKey: 'argentina', regionKey: 'argentina:cordoba' }], species: ['Dove'], tripType: 'Wingshooting', equipment: ['Shotgun'], techniques: ['Pass shooting'], terrain: ['Agricultural fields'], access: ['4x4 vehicle'], price: 1800, huntingDays: 4 },
+  { id: 'elk', sourceId: 'b', search: searchDocument({ title: 'Elk United States' }), destinations: [{ countryKey: 'united-states', regionKey: 'united-states:montana' }], species: ['Elk'], tripType: 'BigGame', equipment: ['Rifle', 'Bow'], techniques: ['Spot and stalk'], terrain: ['Alpine'], access: ['On foot'], price: 7000, huntingDays: 6 },
 ];
 
 const state = (overrides: Partial<FacetState> = {}): FacetState => ({
@@ -36,9 +46,14 @@ test('supports an explicit every-selected-species mode for combination hunts', (
 
 test('treats country and region choices as one hierarchical destination facet', () => {
   assert.deepEqual(
-    filterFacetRecords(records, state({ countries: ['United States'], regions: ['Córdoba'] })).map(({ id }) => id),
-    ['dove', 'elk'],
+    filterFacetRecords(records, state({ countries: ['united-states'], regions: ['argentina:cordoba'] })).map(({ id }) => id),
+    ['duck', 'dove', 'elk'],
   );
+});
+
+test('indexes a multi-region hunt under each canonical destination', () => {
+  assert.deepEqual(filterFacetRecords(records, state({ regions: ['argentina:cordoba'] })).map(({ id }) => id), ['duck', 'dove']);
+  assert.deepEqual(filterFacetRecords(records, state({ regions: ['argentina:santa-fe'] })).map(({ id }) => id), ['duck']);
 });
 
 test('calculates disjunctive counts using every other active constraint', () => {

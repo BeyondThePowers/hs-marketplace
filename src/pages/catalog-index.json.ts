@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { loadCatalogSnapshot, mediaUrl } from '../lib/catalog-build';
 import { publicSlug } from '../lib/public-slugs';
+import { destinationSlug, huntDestinations } from '../lib/hunt-destinations';
 
 export const prerender = true;
 
@@ -22,8 +23,7 @@ export const GET: APIRoute = async ({ site }) => {
       title: hunt.title,
       summary: hunt.summary,
       outfitter: hunt.outfitter_name,
-      country: hunt.country,
-      region: hunt.region,
+      destinations: huntDestinations(hunt.destinations),
       species: {
         primary: hunt.primary_species ?? [],
         secondary: hunt.secondary_species ?? [],
@@ -45,7 +45,7 @@ export const GET: APIRoute = async ({ site }) => {
       terms: hunt.terms,
       image: hunt.id ? mediaUrl(firstMedia.get(hunt.id)) : null,
       url: new URL(`/hunts/${hunt.listing_id}`, site).toString(),
-      destinationUrl: new URL(`/destinations/${publicSlug(`${hunt.region}-${hunt.country}`)}`, site).toString(),
+      destinationUrls: huntDestinations(hunt.destinations).map((destination) => new URL(`/destinations/${destinationSlug(destination)}`, site).toString()),
       speciesUrls: (hunt.primary_species ?? []).map((species) => new URL(`/species/${publicSlug(species)}`, site).toString()),
       sourceUrl: hunt.source_url,
     })),

@@ -2,7 +2,7 @@
 import HuntCard from '../../components/HuntCard.astro';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
-import { publicSlug } from '../../lib/public-slugs';
+import { destinationSlug, huntDestinations } from '../../lib/hunt-destinations';
 
 export const prerender = true;
 
@@ -10,11 +10,12 @@ export async function getStaticPaths() {
   const catalog = await loadCatalogSnapshot();
   const destinations = new Map<string, { name: string; country: string; hunts: typeof catalog.hunts }>();
   for (const hunt of catalog.hunts) {
-    if (!hunt.region || !hunt.country) continue;
-    const slug = publicSlug(`${hunt.region}-${hunt.country}`);
-    const existing = destinations.get(slug) ?? { name: hunt.region, country: hunt.country, hunts: [] };
-    existing.hunts.push(hunt);
-    destinations.set(slug, existing);
+    for (const destination of huntDestinations(hunt.destinations)) {
+      const slug = destinationSlug(destination);
+      const existing = destinations.get(slug) ?? { name: destination.region.name, country: destination.country.name, hunts: [] };
+      existing.hunts.push(hunt);
+      destinations.set(slug, existing);
+    }
   }
   return [...destinations.entries()].map(([slug, destination]) => ({
     params: { slug },
