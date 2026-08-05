@@ -90,8 +90,12 @@ const techniqueTaxonomy = taxonomyNames(classification?.techniques);
 const displayedEquipment = equipmentTaxonomy;
 const displayedTechniques = techniqueTaxonomy;
 const accessMethods = taxonomyNames(territory?.accessMethods);
+const countLabel = (value: unknown, singular: string, plural = `${singular}s`) => {
+  const count = Number(value);
+  return Number.isFinite(count) ? `${count} ${count === 1 ? singular : plural}` : null;
+};
 const durationLabel = duration
-  ? [duration.huntingDays && `${duration.huntingDays} hunting days`, duration.nights !== undefined && `${duration.nights} nights`]
+  ? [duration.huntingDays && countLabel(duration.huntingDays, 'hunting day'), duration.nights !== undefined && countLabel(duration.nights, 'night')]
       .filter(Boolean)
       .join(', ') || String(duration.label ?? duration.days ?? 'See package details')
   : null;
@@ -180,31 +184,68 @@ const huntSchema = [{
 >
   {hunt ? (
     <>
-      <section class="detail-hero" style={heroImage ? `--hero-image: url('${heroImage}')` : undefined}>
-        <div class="shade"></div>
-        <div class="container hero-inner">
-          <a class="back" href="/#hunts">Back to all hunts</a>
-          <p class="location">{destinations.map((destination, index) => <>{index > 0 && ', '}<a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>{index === destinations.length - 1 && `, ${destination.country.name}`}</>)}</p>
-          <h1>{hunt.title}</h1>
-          <p class="outfitter">With {hunt.outfitter_name}</p>
-        </div>
-      </section>
+      <header class="trip-intro">
+        <div class="trip-intro-inner detail-wide">
+          <a class="trip-back" href="/#hunts"><span aria-hidden="true">←</span> All hunts</a>
 
-      {galleryMedia.length > 0 && (
-        <section class="gallery-shell detail-wide" id="photos" aria-label={`${hunt.title} photographs`}>
-          <div class:list={["gallery-mosaic", galleryMedia.length === 1 && "single"]}>
-            <button class="gallery-primary" type="button" data-gallery-index="0" aria-label="Open photo 1">
-              <img src={mediaUrl(galleryMedia[0]) || ''} alt={galleryMedia[0].alt || hunt.title || ''} loading="eager" decoding="async" />
-            </button>
-            {galleryMedia.slice(1, 3).map((item, index) => (
-              <button class="gallery-secondary" type="button" data-gallery-index={String(index + 1)} aria-label={`Open photo ${index + 2}`}>
-                <img src={mediaUrl(item) || ''} alt={item.alt || hunt.title || ''} loading="eager" decoding="async" />
-                {index === Math.min(1, galleryMedia.length - 2) && galleryMedia.length > 3 && <span class="view-gallery">View all {galleryMedia.length} photos</span>}
-              </button>
-            ))}
+          <div class="trip-media" id="photos" aria-label={`${hunt.title} photographs`}>
+            {galleryMedia.length > 0 ? (
+              <>
+                <button class="trip-media-primary" type="button" data-gallery-index="0" aria-label={`Open photo gallery, ${galleryMedia.length} photos`}>
+                  <img
+                    src={mediaUrl(galleryMedia[0]) || ''}
+                    alt={galleryMedia[0].alt || hunt.title || ''}
+                    loading="eager"
+                    decoding="async"
+                    fetchpriority="high"
+                  />
+                  <span class="photo-count" aria-hidden="true"><span class="photo-icon">▣</span> {galleryMedia.length} {galleryMedia.length === 1 ? 'photo' : 'photos'}</span>
+                </button>
+                {galleryMedia.length > 1 && (
+                  <div class="trip-media-rail">
+                    {galleryMedia.slice(1, 3).map((item, index) => (
+                      <button class="trip-media-secondary" type="button" data-gallery-index={String(index + 1)} aria-label={`Open photo ${index + 2} of ${galleryMedia.length}`}>
+                        <img src={mediaUrl(item) || ''} alt="" loading="lazy" decoding="async" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div class="trip-media-placeholder"><span>Hunt photography coming soon</span></div>
+            )}
           </div>
-        </section>
-      )}
+
+          <div class="trip-decision">
+            <nav class="trip-breadcrumbs" aria-label="Breadcrumb">
+              <a href="/#hunts">Hunts</a><span aria-hidden="true">/</span>
+              {destinations.slice(0, 1).map((destination) => <a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>)}
+            </nav>
+            <p class="trip-location">{destinations.map((destination, index) => <>{index > 0 && ' · '}<a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}, {destination.country.name}</a></>)}</p>
+            <h1>{hunt.title}</h1>
+            <p class="trip-outfitter">Offered by <strong>{hunt.outfitter_name}</strong></p>
+            <p class="trip-summary">{hunt.summary}</p>
+
+            <dl class="trip-key-facts">
+              {(hunt.primary_species ?? []).length > 0 && <div><dt>Species</dt><dd>{hunt.primary_species.slice(0, 3).join(', ')}</dd></div>}
+              {durationLabel && <div><dt>Duration</dt><dd>{durationLabel}</dd></div>}
+              {seasonLabel && <div><dt>Season</dt><dd>{seasonLabel}</dd></div>}
+              <div><dt>{methodsAndGuiding?.arrangement ? 'Guiding' : 'Hunt type'}</dt><dd>{methodsAndGuiding?.arrangement ? humanize(methodsAndGuiding.arrangement) : tripTypeLabel}</dd></div>
+            </dl>
+
+            <div class="trip-action" data-inline-trip-action>
+              <div class="trip-price">
+                <span>{hunt.starting_price === null ? 'Pricing' : 'Starting from'}</span>
+                <strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong>
+                {priceOptions[0]?.basis && String(priceOptions[0].basis) !== 'starting-from' && <small>{priceBasis(priceOptions[0].basis)}</small>}
+              </div>
+              <a class="trip-primary-action" href="#inquiry">Check availability</a>
+            </div>
+            <p class="trip-confirmation">Dates and final package terms are confirmed by the outfitter.</p>
+            {hunt.source_url && <a class="trip-source-link" href={hunt.source_url}>View the outfitter's original listing <span aria-hidden="true">↗</span></a>}
+          </div>
+        </div>
+      </header>
 
       <nav class="detail-nav" aria-label="Hunt page sections">
         <div class="detail-nav-inner detail-wide">
@@ -503,7 +544,7 @@ const huntSchema = [{
         </aside>
       </section>
 
-      <a class="mobile-inquiry-bar" href="#inquiry"><span><small>Starting from</small><strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong></span><b>Check availability</b></a>
+      <a class="mobile-inquiry-bar" data-mobile-trip-action href="#inquiry"><span><small>Starting from</small><strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong></span><b>Check availability</b></a>
 
       {galleryMedia.length > 0 && (
         <dialog class="gallery-dialog" data-gallery-dialog aria-label={`${hunt.title} photo gallery`}>
@@ -626,6 +667,15 @@ const huntSchema = [{
       if (visible?.target.id) setCurrentSection(visible.target.id);
     }, { rootMargin: '-18% 0px -62% 0px', threshold: [0, .15, .4] });
     observedSections.forEach((section) => sectionObserver.observe(section));
+  }
+
+  const inlineTripAction = document.querySelector<HTMLElement>('[data-inline-trip-action]');
+  const mobileTripAction = document.querySelector<HTMLElement>('[data-mobile-trip-action]');
+  if (inlineTripAction && mobileTripAction) {
+    const actionObserver = new IntersectionObserver(([entry]) => {
+      mobileTripAction.classList.toggle('is-visible', !entry.isIntersecting && entry.boundingClientRect.top < 0);
+    }, { threshold: 0 });
+    actionObserver.observe(inlineTripAction);
   }
 </script>
 
@@ -1215,6 +1265,464 @@ const huntSchema = [{
       align-items: flex-start;
       flex-direction: column;
       gap: 8px;
+    }
+  }
+</style>
+
+<style>
+  /* Decision-first trip header */
+  .trip-intro {
+    padding: clamp(24px, 3vw, 44px) 0 clamp(30px, 4vw, 56px);
+    border-bottom: 1px solid var(--border);
+    background:
+      radial-gradient(circle at 12% 15%, rgba(197, 148, 77, .1), transparent 30%),
+      linear-gradient(180deg, #f2f1eb 0%, var(--background) 100%);
+  }
+
+  .trip-intro-inner {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.48fr) minmax(390px, 1fr);
+    grid-template-rows: auto minmax(590px, auto);
+    gap: 18px clamp(36px, 4vw, 68px);
+  }
+
+  .trip-back {
+    grid-column: 1 / -1;
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #526057;
+    font-size: .8rem;
+    font-weight: 720;
+  }
+
+  .trip-back span {
+    color: var(--accent-strong);
+    font-size: 1rem;
+  }
+
+  .trip-media {
+    min-width: 0;
+    min-height: 590px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 2.2fr) minmax(150px, .8fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    border-radius: 20px;
+    background: #d8ddd6;
+    box-shadow: 0 24px 60px rgba(18, 27, 21, .14);
+  }
+
+  .trip-media-primary,
+  .trip-media-secondary {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: #d8ddd6;
+    cursor: zoom-in;
+  }
+
+  .trip-media-primary {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+  }
+
+  .trip-media:has(.trip-media-rail) .trip-media-primary {
+    grid-column: 1;
+  }
+
+  .trip-media-rail {
+    min-width: 0;
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / -1;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .trip-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 420ms cubic-bezier(.2, .7, .2, 1), filter 180ms ease;
+  }
+
+  .trip-media button:hover img {
+    transform: scale(1.025);
+    filter: brightness(.94);
+  }
+
+  .photo-count {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    padding: 9px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid rgba(255, 255, 255, .26);
+    border-radius: 999px;
+    background: rgba(12, 19, 14, .78);
+    color: #fff;
+    font-size: .73rem;
+    font-weight: 720;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+    backdrop-filter: blur(10px);
+  }
+
+  .photo-icon {
+    font-size: .62rem;
+  }
+
+  .trip-media-placeholder {
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: .82rem;
+  }
+
+  .trip-decision {
+    min-width: 0;
+    padding: clamp(10px, 1.5vw, 24px) 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .trip-breadcrumbs {
+    margin-bottom: clamp(26px, 4vh, 50px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: #69746c;
+    font-size: .72rem;
+  }
+
+  .trip-breadcrumbs a:hover,
+  .trip-source-link:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .trip-location {
+    margin-bottom: 12px;
+    color: var(--accent-strong);
+    font-size: .72rem;
+    font-weight: 780;
+    letter-spacing: .1em;
+    line-height: 1.5;
+    text-transform: uppercase;
+  }
+
+  .trip-decision h1 {
+    max-width: 650px;
+    margin: 0 0 12px;
+    color: var(--foreground);
+    font-size: clamp(2.75rem, 4vw, 4rem);
+    line-height: .98;
+  }
+
+  .trip-outfitter {
+    margin-bottom: 20px;
+    color: #5e6a62;
+    font-size: .9rem;
+  }
+
+  .trip-outfitter strong {
+    color: var(--foreground);
+  }
+
+  .trip-summary {
+    max-width: 620px;
+    margin-bottom: 26px;
+    color: #4f5c53;
+    font-size: .96rem;
+    line-height: 1.65;
+  }
+
+  .trip-key-facts {
+    margin: 0 0 28px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-top: 1px solid var(--border);
+  }
+
+  .trip-key-facts div {
+    min-width: 0;
+    padding: 14px 14px 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .trip-key-facts div:nth-child(even) {
+    padding-left: 18px;
+    border-left: 1px solid var(--border);
+  }
+
+  .trip-key-facts dt,
+  .trip-price > span {
+    margin-bottom: 5px;
+    color: #6a756d;
+    font-size: .65rem;
+    font-weight: 780;
+    letter-spacing: .085em;
+    text-transform: uppercase;
+  }
+
+  .trip-key-facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #263129;
+    font-size: .84rem;
+    font-weight: 720;
+    line-height: 1.35;
+  }
+
+  .trip-action {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .trip-price {
+    display: grid;
+  }
+
+  .trip-price strong {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(2rem, 3vw, 2.7rem);
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .trip-price small {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: .7rem;
+  }
+
+  .trip-primary-action {
+    min-height: 50px;
+    padding: 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--foreground);
+    color: #fff;
+    font-size: .82rem;
+    font-weight: 760;
+    box-shadow: 0 10px 24px rgba(24, 33, 27, .16);
+  }
+
+  .trip-primary-action:hover {
+    background: var(--accent-strong);
+  }
+
+  .trip-confirmation {
+    margin: 17px 0 8px;
+    color: var(--muted);
+    font-size: .72rem;
+    line-height: 1.45;
+  }
+
+  .trip-source-link {
+    width: fit-content;
+    color: #526057;
+    font-size: .72rem;
+    font-weight: 680;
+  }
+
+  .trip-intro + .detail-nav {
+    margin-top: 18px;
+  }
+
+  .mobile-inquiry-bar:not(.is-visible) {
+    display: none;
+  }
+
+  @media (max-width: 1050px) {
+    .trip-intro-inner {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      gap: 18px;
+    }
+
+    .trip-back {
+      grid-column: 1;
+    }
+
+    .trip-media {
+      min-height: auto;
+      aspect-ratio: 16 / 9;
+    }
+
+    .trip-decision {
+      width: min(760px, 100%);
+      padding: 16px 0 0;
+    }
+
+    .trip-breadcrumbs {
+      margin-bottom: 24px;
+    }
+
+    .trip-summary {
+      max-width: 720px;
+    }
+
+    .trip-key-facts {
+      max-width: 720px;
+    }
+
+    .trip-action {
+      max-width: 620px;
+    }
+
+  }
+
+  @media (max-width: 960px) {
+    .mobile-inquiry-bar.is-visible {
+      display: flex;
+    }
+  }
+
+  @media (max-width: 680px) {
+    .trip-intro {
+      padding: 0 0 28px;
+    }
+
+    .trip-intro .trip-intro-inner {
+      width: 100%;
+      gap: 0;
+    }
+
+    .trip-back {
+      position: absolute;
+      z-index: 2;
+      top: 12px;
+      left: 12px;
+      padding: 8px 11px;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 999px;
+      background: rgba(10, 17, 12, .7);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
+      backdrop-filter: blur(9px);
+    }
+
+    .trip-back span {
+      color: #fff;
+    }
+
+    .trip-media {
+      min-height: 230px;
+      aspect-ratio: 16 / 10;
+      display: block;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .trip-media-primary {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .trip-media-rail {
+      display: none;
+    }
+
+    .photo-count {
+      right: 12px;
+      bottom: 12px;
+    }
+
+    .trip-decision {
+      width: calc(100% - 32px);
+      margin: -12px auto 0;
+      padding: 24px 4px 0;
+      position: relative;
+      border-radius: 16px 16px 0 0;
+      background: var(--background);
+    }
+
+    .trip-breadcrumbs {
+      display: none;
+    }
+
+    .trip-location {
+      margin-bottom: 8px;
+      font-size: .65rem;
+    }
+
+    .trip-decision h1 {
+      margin-bottom: 8px;
+      font-size: clamp(2.35rem, 11.5vw, 3.35rem);
+      line-height: .96;
+    }
+
+    .trip-outfitter {
+      margin-bottom: 14px;
+      font-size: .82rem;
+    }
+
+    .trip-summary {
+      margin-bottom: 20px;
+      font-size: .88rem;
+      line-height: 1.55;
+    }
+
+    .trip-key-facts {
+      margin-bottom: 22px;
+    }
+
+    .trip-key-facts div {
+      padding: 12px 10px 12px 0;
+    }
+
+    .trip-key-facts div:nth-child(even) {
+      padding-left: 12px;
+    }
+
+    .trip-key-facts dd {
+      font-size: .78rem;
+    }
+
+    .trip-action {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+    }
+
+    .trip-price strong {
+      font-size: 2rem;
+    }
+
+    .trip-primary-action {
+      min-height: 48px;
+      padding: 0 17px;
+      font-size: .76rem;
+    }
+
+    .trip-intro + .detail-nav {
+      margin-top: 12px;
+    }
+  }
+
+  @media (max-width: 390px) {
+    .trip-action {
+      grid-template-columns: 1fr;
+    }
+
+    .trip-primary-action {
+      width: 100%;
     }
   }
 </style>
