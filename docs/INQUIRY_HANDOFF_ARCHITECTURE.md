@@ -2,7 +2,7 @@
 
 Status: Source endpoints implemented for ABH and JJ
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-05
 
 ## Product boundary
 
@@ -97,6 +97,40 @@ The common form payload should support:
 The source endpoint must treat titles, prices, and other browser-supplied hunt
 facts as display context only. It resolves authoritative hunt facts from its
 own deployment before creating the lead.
+
+## Public inquiry date rules
+
+The marketing site remains the publisher of inquiry date constraints. It reads
+the source portal's `hunt_inquiry_years` and `hunt_inquiry_dates` records during
+the static build and translates them into the hunt's public
+`seasonAndAvailability.inquiryRules` object. The public object contains only:
+
+- configured calendar years;
+- whether each year is an allow list or block list;
+- the applicable ISO calendar dates; and
+- the rule that every date in a requested range must be allowed.
+
+The object is associated with the permanent public listing ID. It contains no
+portal hunt type ID or portal credentials. Central ingestion retains the rules
+inside the hunt's `season_and_availability` snapshot, so the marketplace form
+can enforce the same constraints without querying an outfitter database.
+
+Date rules limit which ranges may be submitted for an inquiry. They do not
+claim real-time inventory or guarantee a booking. Public actions therefore use
+`Request dates`, and the outfitter still confirms the schedule.
+
+Validation must occur in three places:
+
+1. The source marketing-site date picker disables dates outside the rules.
+2. The marketplace validates every day in the requested range from its static
+   catalog snapshot.
+3. The source endpoint reloads the authoritative portal rules and rejects the
+   request if any day in the range is not allowed.
+
+Checking only the first and last day is insufficient because a range can span
+a blocked date. A direct-inquiry publisher also fails its feed build when it
+cannot complete the portal availability read, preventing a transient
+configuration failure from silently clearing published rules.
 
 ## Security and reliability
 

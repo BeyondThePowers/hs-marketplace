@@ -10,6 +10,7 @@
   --gold: #c5944d;
   --dark: #121914;
   --radius: 18px;
+  --detail-width: 1400px;
 }
 
 * {
@@ -83,14 +84,20 @@ a {
   position: relative;
   z-index: 10;
   min-height: 72px;
-  padding: 0 max(16px, calc((100vw - 1200px) / 2));
+  padding: 0;
+  background: var(--dark);
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.site-header-inner {
+  width: min(var(--detail-width), calc(100% - 48px));
+  min-height: 72px;
+  margin-inline: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: var(--dark);
-  color: #fff;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .brand {
@@ -147,6 +154,10 @@ a {
 }
 
 @media (max-width: 640px) {
+  .site-header-inner {
+    width: calc(100% - 32px);
+  }
+
   .site-header nav a:last-child {
     display: none;
   }

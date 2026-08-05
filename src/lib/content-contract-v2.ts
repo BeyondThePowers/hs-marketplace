@@ -16,6 +16,15 @@ export const PublicSpeciesTaxonomyRefSchema = PublicTaxonomyRefSchema.extend({
   speciesGroup: PublicTaxonomyRefSchema.optional(),
 });
 
+export const PublicInquiryDateRulesSchema = z.object({
+  years: z.array(z.object({
+    year: z.number().int().min(2000).max(2200),
+    mode: z.enum(['allow', 'block']),
+  })).min(1),
+  dates: z.array(z.string().date()).default([]),
+  rangePolicy: z.literal('every-date-must-be-allowed'),
+});
+
 export const PublicMediaSchema = z.object({
   id: z.string().min(1),
   url: absoluteUrl,
@@ -220,6 +229,7 @@ export const PublicHuntSchema = z.object({
         })
       )
       .default([]),
+    inquiryRules: PublicInquiryDateRulesSchema.nullable(),
   }),
   methodsAndGuiding: z.object({
     guidingRatio: z.string().min(1),

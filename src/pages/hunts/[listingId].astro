@@ -72,6 +72,11 @@ const formatPrice = (amount: number | null, currency: string | null) =>
 
 const duration = (hunt.duration_and_party ?? hunt.duration) as Record<string, unknown> | null;
 const season = (hunt.season_and_availability ?? hunt.season) as Record<string, unknown> | null;
+const inquiryRules = record(season?.inquiryRules);
+const inquiryRuleYears = records(inquiryRules?.years)
+  .map((item) => Number(item.year))
+  .filter(Number.isFinite)
+  .sort((left, right) => left - right);
 const methodsAndGuiding = record(hunt.methods_and_guiding);
 const pricing = record(hunt.pricing);
 const priceOptions = records(pricing?.options);
@@ -128,6 +133,7 @@ const inquiry = hunt.outfitter_inquiry && typeof hunt.outfitter_inquiry === 'obj
 const directInquiry = inquiry?.mode === 'source-endpoint' && typeof inquiry.submissionUrl === 'string'
   ? inquiry
   : null;
+const inquiryActionLabel = directInquiry ? 'Request dates' : 'Contact outfitter';
 const lodgeRegion = (location: unknown) => {
   if (!location || typeof location !== 'object' || Array.isArray(location)) return null;
   return String((location as Record<string, unknown>).region ?? '') || null;
@@ -239,7 +245,7 @@ const huntSchema = [{
                 <strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong>
                 {priceOptions[0]?.basis && String(priceOptions[0].basis) !== 'starting-from' && <small>{priceBasis(priceOptions[0].basis)}</small>}
               </div>
-              <a class="trip-primary-action" href="#inquiry">Check availability</a>
+              <a class="trip-primary-action" href="#inquiry">{inquiryActionLabel}</a>
             </div>
             <p class="trip-confirmation">Dates and final package terms are confirmed by the outfitter.</p>
             {hunt.source_url && <a class="trip-source-link" href={hunt.source_url}>View the outfitter's original listing <span aria-hidden="true">↗</span></a>}
@@ -519,15 +525,18 @@ const huntSchema = [{
           {priceOptions[0]?.basis && <p class="price-basis">{priceBasis(priceOptions[0].basis)}</p>}
           <p>Confirm dates, availability, and final package terms directly with the outfitter.</p>
           {directInquiry ? (
-            <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id}>
+            <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id} data-inquiry-rules={inquiryRules ? JSON.stringify(inquiryRules) : undefined}>
               <h2>Ask about this hunt</h2>
               <label><span>Name</span><input name="name" autocomplete="name" required /></label>
               <label><span>Email</span><input name="email" type="email" autocomplete="email" required /></label>
               <label><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required /></label>
               <div class="form-row">
-                <label><span>From</span><input name="from_date" type="date" required /></label>
-                <label><span>To</span><input name="to_date" type="date" required /></label>
+                <label><span>Preferred start</span><input name="from_date" type="date" data-inquiry-start required /></label>
+                <label><span>Preferred end</span><input name="to_date" type="date" data-inquiry-end required /></label>
               </div>
+              <p class="date-guidance" data-date-guidance>{inquiryRuleYears.length > 0
+                ? `Published inquiry calendar: ${inquiryRuleYears.join(', ')}. Every day in the requested range must be open.`
+                : 'Share your preferred future dates. The outfitter will confirm the final schedule.'}</p>
               <div class="form-row">
                 <label><span>Hunters</span><input name="num_hunters" type="number" min="1" value="1" required /></label>
                 <label><span>Non-hunters</span><input name="num_non_hunters" type="number" min="0" value="0" /></label>
@@ -544,7 +553,7 @@ const huntSchema = [{
         </aside>
       </section>
 
-      <a class="mobile-inquiry-bar" data-mobile-trip-action href="#inquiry"><span><small>Starting from</small><strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong></span><b>Check availability</b></a>
+      <a class="mobile-inquiry-bar" data-mobile-trip-action href="#inquiry"><span><small>Starting from</small><strong>{formatPrice(hunt.starting_price, hunt.currency)}</strong></span><b>{inquiryActionLabel}</b></a>
 
       {galleryMedia.length > 0 && (
         <dialog class="gallery-dialog" data-gallery-dialog aria-label={`${hunt.title} photo gallery`}>
@@ -569,8 +578,59 @@ const huntSchema = [{
 <script>
   const inquiryForm = document.querySelector<HTMLFormElement>('[data-inquiry-form]');
   if (inquiryForm) {
+    const startInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-start]');
+    const endInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-end]');
+    const guidance = inquiryForm.querySelector<HTMLElement>('[data-date-guidance]');
+    const guidanceText = guidance?.textContent || '';
+    const rules = inquiryForm.dataset.inquiryRules
+      ? JSON.parse(inquiryForm.dataset.inquiryRules) as { years: Array<{ year: number; mode: 'allow' | 'block' }>; dates: string[] }
+      : null;
+    const localDate = new Date();
+    const today = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    const allowedDate = (date: string) => {
+      if (!rules) return date >= today;
+      const yearRule = rules.years.find((item) => item.year === Number(date.slice(0, 4)));
+      if (!yearRule) return false;
+      const listed = rules.dates.includes(date);
+      return yearRule.mode === 'allow' ? listed : !listed;
+    };
+    const allowedRange = (start: string, end: string) => {
+      if (!start || !end || start < today || end < start) return false;
+      const current = new Date(`${start}T00:00:00Z`);
+      const final = new Date(`${end}T00:00:00Z`);
+      while (current <= final) {
+        if (!allowedDate(current.toISOString().slice(0, 10))) return false;
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+      return true;
+    };
+    const validateDates = () => {
+      if (!startInput || !endInput) return true;
+      startInput.min = today;
+      endInput.min = startInput.value || today;
+      if (rules?.years.length) {
+        const maximumYear = Math.max(...rules.years.map((item) => item.year));
+        startInput.max = `${maximumYear}-12-31`;
+        endInput.max = `${maximumYear}-12-31`;
+      }
+      const complete = Boolean(startInput.value && endInput.value);
+      const valid = !complete || allowedRange(startInput.value, endInput.value);
+      const message = valid ? '' : 'Choose a future range where every date is open for inquiries.';
+      startInput.setCustomValidity(message);
+      endInput.setCustomValidity(message);
+      if (guidance) guidance.textContent = complete && !valid ? message : guidanceText;
+      return valid;
+    };
+    startInput?.addEventListener('change', validateDates);
+    endInput?.addEventListener('change', validateDates);
+    validateDates();
+
     inquiryForm.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (!validateDates()) {
+        endInput?.reportValidity();
+        return;
+      }
       const status = inquiryForm.querySelector<HTMLElement>('[data-inquiry-status]');
       const button = inquiryForm.querySelector<HTMLButtonElement>('button[type="submit"]');
       const values = Object.fromEntries(new FormData(inquiryForm));
@@ -1165,6 +1225,13 @@ const huntSchema = [{
     line-height: 1.45;
   }
 
+  .date-guidance {
+    margin: -4px 0 2px;
+    color: var(--muted);
+    font-size: .72rem;
+    line-height: 1.45;
+  }
+
   .price-label {
     margin-bottom: 6px;
   }
@@ -1275,8 +1342,8 @@ const huntSchema = [{
     padding: clamp(24px, 3vw, 44px) 0 clamp(30px, 4vw, 56px);
     border-bottom: 1px solid var(--border);
     background:
-      radial-gradient(circle at 12% 15%, rgba(197, 148, 77, .1), transparent 30%),
-      linear-gradient(180deg, #f2f1eb 0%, var(--background) 100%);
+      radial-gradient(circle at 12% 15%, rgba(197, 148, 77, .12), transparent 30%),
+      linear-gradient(180deg, #f7f3e9 0%, #faf9f5 100%);
   }
 
   .trip-intro-inner {
@@ -1390,18 +1457,22 @@ const huntSchema = [{
 
   .trip-decision {
     min-width: 0;
-    padding: clamp(10px, 1.5vw, 24px) 0;
+    padding: clamp(26px, 2.5vw, 38px);
     display: flex;
     flex-direction: column;
     justify-content: center;
+    border: 1px solid #d6d8d1;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, .7);
+    box-shadow: 0 18px 50px rgba(18, 27, 21, .055);
   }
 
   .trip-breadcrumbs {
-    margin-bottom: clamp(26px, 4vh, 50px);
+    margin-bottom: 22px;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    color: #69746c;
+    color: #526057;
     font-size: .72rem;
   }
 
@@ -1432,7 +1503,7 @@ const huntSchema = [{
 
   .trip-outfitter {
     margin-bottom: 20px;
-    color: #5e6a62;
+    color: #455349;
     font-size: .9rem;
   }
 
@@ -1443,7 +1514,7 @@ const huntSchema = [{
   .trip-summary {
     max-width: 620px;
     margin-bottom: 26px;
-    color: #4f5c53;
+    color: #354239;
     font-size: .96rem;
     line-height: 1.65;
   }
@@ -1452,18 +1523,18 @@ const huntSchema = [{
     margin: 0 0 28px;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-top: 1px solid var(--border);
+    border-top: 1px solid #cfd4cd;
   }
 
   .trip-key-facts div {
     min-width: 0;
     padding: 14px 14px 14px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid #cfd4cd;
   }
 
   .trip-key-facts div:nth-child(even) {
     padding-left: 18px;
-    border-left: 1px solid var(--border);
+    border-left: 1px solid #cfd4cd;
   }
 
   .trip-key-facts dt,
@@ -1487,9 +1558,10 @@ const huntSchema = [{
 
   .trip-action {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 20px;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding-top: 24px;
+    border-top: 1px solid #cfd4cd;
   }
 
   .trip-price {
@@ -1510,12 +1582,13 @@ const huntSchema = [{
   }
 
   .trip-primary-action {
+    width: 100%;
     min-height: 50px;
     padding: 0 22px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
+    border-radius: 11px;
     background: var(--foreground);
     color: #fff;
     font-size: .82rem;
@@ -1567,7 +1640,7 @@ const huntSchema = [{
 
     .trip-decision {
       width: min(760px, 100%);
-      padding: 16px 0 0;
+      padding: 30px;
     }
 
     .trip-breadcrumbs {
@@ -1583,7 +1656,7 @@ const huntSchema = [{
     }
 
     .trip-action {
-      max-width: 620px;
+      max-width: none;
     }
 
   }
@@ -1650,8 +1723,10 @@ const huntSchema = [{
       margin: -12px auto 0;
       padding: 24px 4px 0;
       position: relative;
+      border: 0;
       border-radius: 16px 16px 0 0;
       background: var(--background);
+      box-shadow: none;
     }
 
     .trip-breadcrumbs {
@@ -1697,7 +1772,7 @@ const huntSchema = [{
     }
 
     .trip-action {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: 1fr;
       gap: 12px;
     }
 
