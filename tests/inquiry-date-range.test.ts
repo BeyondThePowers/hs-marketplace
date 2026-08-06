@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { hasStrictDateOrder, inquiryCalendarBounds, inquiryDateConstraints, shiftIsoDate } from '../src/lib/inquiry-date-range.ts';
+import {
+  hasStrictDateOrder,
+  inquiryCalendarBounds,
+  inquiryDateConstraints,
+  isInquiryDateAvailable,
+  isInquiryRangeAvailable,
+  shiftIsoDate,
+} from '../src/lib/inquiry-date-range.ts';
 
 test('requires the end date to be later than the start date', () => {
   assert.equal(hasStrictDateOrder('2026-08-10', '2026-08-11'), true);
@@ -80,4 +87,31 @@ test('derives block-list boundaries from the configured year', () => {
 test('shifts dates safely across month and leap-year boundaries', () => {
   assert.equal(shiftIsoDate('2028-02-28', 1), '2028-02-29');
   assert.equal(shiftIsoDate('2028-03-01', -1), '2028-02-29');
+});
+
+test('evaluates allow-list and block-list dates consistently', () => {
+  assert.equal(isInquiryDateAvailable('2026-08-12', {
+    years: [{ year: 2026, mode: 'allow' }],
+    dates: ['2026-08-12', '2026-08-13'],
+  }, '2026-08-05'), true);
+  assert.equal(isInquiryDateAvailable('2026-08-11', {
+    years: [{ year: 2026, mode: 'allow' }],
+    dates: ['2026-08-12', '2026-08-13'],
+  }, '2026-08-05'), false);
+  assert.equal(isInquiryDateAvailable('2026-08-12', {
+    years: [{ year: 2026, mode: 'block' }],
+    dates: ['2026-08-12'],
+  }, '2026-08-05'), false);
+});
+
+test('rejects a range that crosses an unavailable date', () => {
+  const rules = {
+    years: [{ year: 2026, mode: 'allow' as const }],
+    dates: ['2026-08-12', '2026-08-14'],
+  };
+  assert.equal(isInquiryRangeAvailable('2026-08-12', '2026-08-14', rules, '2026-08-05'), false);
+  assert.equal(isInquiryRangeAvailable('2026-08-12', '2026-08-13', {
+    ...rules,
+    dates: ['2026-08-12', '2026-08-13'],
+  }, '2026-08-05'), true);
 });

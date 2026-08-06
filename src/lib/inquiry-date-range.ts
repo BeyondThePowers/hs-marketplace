@@ -10,6 +10,34 @@ export type InquiryAvailabilityRules = {
   dates: string[];
 };
 
+export function isInquiryDateAvailable(
+  date: string,
+  rules: InquiryAvailabilityRules | null,
+  today: string,
+): boolean {
+  if (!date || date < today) return false;
+  if (!rules) return true;
+  const yearRule = rules.years.find((item) => item.year === Number(date.slice(0, 4)));
+  if (!yearRule) return false;
+  const listed = rules.dates.includes(date);
+  return yearRule.mode === 'allow' ? listed : !listed;
+}
+
+export function isInquiryRangeAvailable(
+  start: string,
+  end: string,
+  rules: InquiryAvailabilityRules | null,
+  today: string,
+): boolean {
+  if (!hasStrictDateOrder(start, end)) return false;
+  let current = start;
+  while (current <= end) {
+    if (!isInquiryDateAvailable(current, rules, today)) return false;
+    current = shiftIsoDate(current, 1);
+  }
+  return true;
+}
+
 export function shiftIsoDate(value: string, days: number): string {
   const date = new Date(`${value}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);

@@ -481,9 +481,39 @@ const huntSchema = [{
               <label><span>Name</span><input name="name" autocomplete="name" required /></label>
               <label><span>Email</span><input name="email" type="email" autocomplete="email" required /></label>
               <label><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required /></label>
-              <div class="form-row">
-                <label><span>Preferred start</span><input name="from_date" type="date" data-inquiry-start required /></label>
-                <label><span>Preferred end</span><input name="to_date" type="date" data-inquiry-end required /></label>
+              <div class="date-range-field" data-date-range-picker>
+                <span class="date-range-label" id="preferred-dates-label">Preferred dates</span>
+                <button class="date-range-trigger" type="button" data-date-range-trigger aria-labelledby="preferred-dates-label" aria-haspopup="dialog" aria-expanded="false">
+                  <span><small>Start</small><b data-start-display>Select date</b></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>End</small><b data-end-display>Select date</b></span>
+                </button>
+                <input name="from_date" type="hidden" data-inquiry-start />
+                <input name="to_date" type="hidden" data-inquiry-end />
+                <dialog class="date-range-dialog" data-date-range-dialog aria-labelledby="date-range-title">
+                  <div class="date-range-dialog-inner">
+                    <header>
+                      <div><p id="date-range-title">Select preferred dates</p><span data-date-instruction>Choose a start date</span></div>
+                      <button type="button" data-date-close aria-label="Close date picker">×</button>
+                    </header>
+                    <div class="date-range-selection" aria-live="polite">
+                      <span><small>Start</small><strong data-dialog-start>Not selected</strong></span>
+                      <i aria-hidden="true">→</i>
+                      <span><small>End</small><strong data-dialog-end>Not selected</strong></span>
+                    </div>
+                    <div class="date-range-navigation">
+                      <button type="button" data-month-previous aria-label="Previous month">‹</button>
+                      <span class="sr-only" data-calendar-announcement aria-live="polite"></span>
+                      <button type="button" data-month-next aria-label="Next month">›</button>
+                    </div>
+                    <div class="date-range-calendars" data-date-calendars></div>
+                    <p class="date-dialog-error" data-date-dialog-error aria-live="polite" hidden></p>
+                    <footer>
+                      <button type="button" class="date-clear" data-date-clear>Clear</button>
+                      <button type="button" class="primary" data-date-apply disabled>Apply dates</button>
+                    </footer>
+                  </div>
+                </dialog>
               </div>
               <p class="date-error" data-date-error aria-live="polite" hidden></p>
               <div class="form-row">
@@ -525,12 +555,20 @@ const huntSchema = [{
 </BaseLayout>
 
 <script>
-  import { hasStrictDateOrder, inquiryCalendarBounds, inquiryDateConstraints } from '../../lib/inquiry-date-range';
+  import {
+    inquiryCalendarBounds,
+    isInquiryDateAvailable,
+    isInquiryRangeAvailable,
+    shiftIsoDate,
+  } from '../../lib/inquiry-date-range';
 
   const inquiryForm = document.querySelector<HTMLFormElement>('[data-inquiry-form]');
   if (inquiryForm) {
     const startInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-start]');
     const endInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-end]');
+    const picker = inquiryForm.querySelector<HTMLElement>('[data-date-range-picker]');
+    const trigger = picker?.querySelector<HTMLButtonElement>('[data-date-range-trigger]');
+    const dialog = picker?.querySelector<HTMLDialogElement>('[data-date-range-dialog]');
     const dateError = inquiryForm.querySelector<HTMLElement>('[data-date-error]');
     const rules = inquiryForm.dataset.inquiryRules
       ? JSON.parse(inquiryForm.dataset.inquiryRules) as { years: Array<{ year: number; mode: 'allow' | 'block' }>; dates: string[] }
@@ -538,63 +576,194 @@ const huntSchema = [{
     const localDate = new Date();
     const today = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
     const calendarBounds = rules ? inquiryCalendarBounds(rules, today) : null;
-    const allowedDate = (date: string) => {
-      if (!rules) return date >= today;
-      const yearRule = rules.years.find((item) => item.year === Number(date.slice(0, 4)));
-      if (!yearRule) return false;
-      const listed = rules.dates.includes(date);
-      return yearRule.mode === 'allow' ? listed : !listed;
-    };
-    const allowedRange = (start: string, end: string) => {
-      if (!start || !end || start < today || end <= start) return false;
-      const current = new Date(`${start}T00:00:00Z`);
-      const final = new Date(`${end}T00:00:00Z`);
-      while (current <= final) {
-        if (!allowedDate(current.toISOString().slice(0, 10))) return false;
-        current.setUTCDate(current.getUTCDate() + 1);
-      }
-      return true;
-    };
-    const validateDates = () => {
+    const allowedDate = (date: string) => isInquiryDateAvailable(date, rules, today);
+    const allowedRange = (start: string, end: string) => isInquiryRangeAvailable(start, end, rules, today);
+    const formatDate = (date: string) => date
+      ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`))
+      : '';
+    const validateDates = (showIncomplete = false) => {
       if (!startInput || !endInput) return true;
-      const constraints = inquiryDateConstraints({
-        today,
-        start: startInput.value,
-        end: endInput.value,
-        calendarMinimum: calendarBounds?.minimum,
-        calendarMaximum: calendarBounds?.maximum,
-      });
-      startInput.min = constraints.startMin;
-      endInput.min = constraints.endMin;
-      if (constraints.startMax) startInput.max = constraints.startMax;
-      else startInput.removeAttribute('max');
-      if (constraints.endMax) endInput.max = constraints.endMax;
-      else endInput.removeAttribute('max');
-
       const complete = Boolean(startInput.value && endInput.value);
-      const ordered = !complete || hasStrictDateOrder(startInput.value, endInput.value);
-      const valid = !complete || (ordered && allowedRange(startInput.value, endInput.value));
-      const message = valid
-        ? ''
-        : !ordered
-          ? 'Preferred end date must be after preferred start date.'
-          : 'Choose a future range where every date is open for inquiries.';
+      const valid = complete && allowedRange(startInput.value, endInput.value);
+      const message = !complete && showIncomplete
+        ? 'Select both a preferred start and end date.'
+        : complete && !valid
+          ? 'Choose a future range where every date is open for inquiries.'
+          : '';
       startInput.setCustomValidity(message);
       endInput.setCustomValidity(message);
+      trigger?.setAttribute('aria-invalid', message ? 'true' : 'false');
       if (dateError) {
         dateError.textContent = message;
         dateError.hidden = !message;
       }
-      return valid;
+      return complete && valid;
     };
-    startInput?.addEventListener('input', validateDates);
-    endInput?.addEventListener('input', validateDates);
+
+    if (picker && trigger && dialog && startInput && endInput) {
+      const calendars = dialog.querySelector<HTMLElement>('[data-date-calendars]');
+      const startDisplay = picker.querySelector<HTMLElement>('[data-start-display]');
+      const endDisplay = picker.querySelector<HTMLElement>('[data-end-display]');
+      const dialogStart = dialog.querySelector<HTMLElement>('[data-dialog-start]');
+      const dialogEnd = dialog.querySelector<HTMLElement>('[data-dialog-end]');
+      const instruction = dialog.querySelector<HTMLElement>('[data-date-instruction]');
+      const announcement = dialog.querySelector<HTMLElement>('[data-calendar-announcement]');
+      const dialogError = dialog.querySelector<HTMLElement>('[data-date-dialog-error]');
+      const applyButton = dialog.querySelector<HTMLButtonElement>('[data-date-apply]');
+      const previousButton = dialog.querySelector<HTMLButtonElement>('[data-month-previous]');
+      const nextButton = dialog.querySelector<HTMLButtonElement>('[data-month-next]');
+      const minimum = calendarBounds?.minimum || today;
+      const maximum = calendarBounds?.maximum || shiftIsoDate(today, 1095);
+      let draftStart = '';
+      let draftEnd = '';
+      let visibleMonth = new Date(`${minimum.slice(0, 7)}-01T00:00:00Z`);
+      const compactCalendar = () => !window.matchMedia('(min-width: 720px)').matches;
+      const monthIso = (date: Date) => date.toISOString().slice(0, 7);
+      const moveMonth = (date: Date, offset: number) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset, 1));
+
+      const updateSelection = () => {
+        if (startDisplay) startDisplay.textContent = draftStart ? formatDate(draftStart) : 'Select date';
+        if (endDisplay) endDisplay.textContent = draftEnd ? formatDate(draftEnd) : 'Select date';
+        if (dialogStart) dialogStart.textContent = draftStart ? formatDate(draftStart) : 'Not selected';
+        if (dialogEnd) dialogEnd.textContent = draftEnd ? formatDate(draftEnd) : 'Not selected';
+        if (instruction) instruction.textContent = draftStart && !draftEnd ? 'Now choose an end date' : draftStart ? 'Review or change your dates' : 'Choose a start date';
+        if (applyButton) applyButton.disabled = !allowedRange(draftStart, draftEnd);
+      };
+
+      const renderCalendars = () => {
+        if (!calendars) return;
+        calendars.replaceChildren();
+        const monthCount = compactCalendar() ? 1 : 2;
+        for (let monthOffset = 0; monthOffset < monthCount; monthOffset += 1) {
+          const month = moveMonth(visibleMonth, monthOffset);
+          const section = document.createElement('section');
+          section.className = 'date-calendar';
+          const heading = document.createElement('h3');
+          heading.textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(month);
+          section.append(heading);
+          const weekdays = document.createElement('div');
+          weekdays.className = 'date-weekdays';
+          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach((day) => {
+            const label = document.createElement('span');
+            label.textContent = day.slice(0, 1);
+            label.setAttribute('aria-label', day);
+            weekdays.append(label);
+          });
+          section.append(weekdays);
+          const grid = document.createElement('div');
+          grid.className = 'date-days';
+          grid.setAttribute('role', 'grid');
+          grid.setAttribute('aria-label', heading.textContent);
+          const firstWeekday = month.getUTCDay();
+          for (let blank = 0; blank < firstWeekday; blank += 1) grid.append(document.createElement('span'));
+          const daysInMonth = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+          for (let day = 1; day <= daysInMonth; day += 1) {
+            const date = `${monthIso(month)}-${String(day).padStart(2, '0')}`;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.textContent = String(day);
+            button.dataset.calendarDate = date;
+            button.setAttribute('role', 'gridcell');
+            button.setAttribute('aria-label', formatDate(date));
+            button.disabled = !allowedDate(date);
+            button.tabIndex = date === draftStart || (!draftStart && date === minimum) ? 0 : -1;
+            if (date === draftStart) button.classList.add('range-start');
+            if (date === draftEnd) button.classList.add('range-end');
+            if (draftStart && draftEnd && date > draftStart && date < draftEnd) button.classList.add('in-range');
+            if (date === draftStart || date === draftEnd) button.setAttribute('aria-selected', 'true');
+            button.addEventListener('click', () => {
+              if (!draftStart || draftEnd || date <= draftStart) {
+                draftStart = date;
+                draftEnd = '';
+                if (dialogError) dialogError.hidden = true;
+              } else if (allowedRange(draftStart, date)) {
+                draftEnd = date;
+                if (dialogError) dialogError.hidden = true;
+              } else if (dialogError) {
+                dialogError.textContent = 'That range includes dates the outfitter has not opened for inquiries.';
+                dialogError.hidden = false;
+              }
+              updateSelection();
+              renderCalendars();
+            });
+            grid.append(button);
+          }
+          grid.addEventListener('keydown', (event) => {
+            const current = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-calendar-date]');
+            if (!current) return;
+            const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+            const offset = offsets[event.key];
+            if (!offset) return;
+            event.preventDefault();
+            const targetDate = shiftIsoDate(current.dataset.calendarDate || '', offset);
+            const targetMonth = targetDate.slice(0, 7);
+            if (targetMonth < monthIso(visibleMonth) || targetMonth > monthIso(moveMonth(visibleMonth, monthCount - 1))) {
+              visibleMonth = new Date(`${targetMonth}-01T00:00:00Z`);
+              renderCalendars();
+            }
+            dialog.querySelector<HTMLButtonElement>(`[data-calendar-date="${targetDate}"]:not(:disabled)`)?.focus();
+          });
+          section.append(grid);
+          calendars.append(section);
+        }
+        const lastVisibleMonth = moveMonth(visibleMonth, monthCount - 1);
+        if (previousButton) previousButton.disabled = monthIso(visibleMonth) <= minimum.slice(0, 7);
+        if (nextButton) nextButton.disabled = monthIso(lastVisibleMonth) >= maximum.slice(0, 7);
+        if (announcement) announcement.textContent = [...calendars.querySelectorAll('h3')].map((item) => item.textContent).join(' and ');
+      };
+
+      const openPicker = () => {
+        draftStart = startInput.value;
+        draftEnd = endInput.value;
+        visibleMonth = new Date(`${(draftStart || minimum).slice(0, 7)}-01T00:00:00Z`);
+        updateSelection();
+        renderCalendars();
+        trigger.setAttribute('aria-expanded', 'true');
+        dialog.showModal();
+        requestAnimationFrame(() => {
+          const preferredDate = draftStart || minimum;
+          dialog.querySelector<HTMLButtonElement>(`[data-calendar-date="${preferredDate}"]:not(:disabled)`)?.focus();
+        });
+      };
+      const closePicker = () => dialog.close();
+      trigger.addEventListener('click', openPicker);
+      dialog.querySelector('[data-date-close]')?.addEventListener('click', closePicker);
+      dialog.addEventListener('close', () => {
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.focus();
+      });
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) closePicker();
+      });
+      previousButton?.addEventListener('click', () => { visibleMonth = moveMonth(visibleMonth, -1); renderCalendars(); });
+      nextButton?.addEventListener('click', () => { visibleMonth = moveMonth(visibleMonth, 1); renderCalendars(); });
+      dialog.querySelector('[data-date-clear]')?.addEventListener('click', () => {
+        draftStart = '';
+        draftEnd = '';
+        updateSelection();
+        renderCalendars();
+      });
+      applyButton?.addEventListener('click', () => {
+        startInput.value = draftStart;
+        endInput.value = draftEnd;
+        updateSelection();
+        validateDates();
+        closePicker();
+      });
+      window.matchMedia('(min-width: 720px)').addEventListener('change', () => dialog.open && renderCalendars());
+      inquiryForm.addEventListener('inquiry-date-range-reset', () => {
+        draftStart = '';
+        draftEnd = '';
+        updateSelection();
+      });
+      updateSelection();
+    }
     validateDates();
 
     inquiryForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!validateDates()) {
-        endInput?.reportValidity();
+      if (!validateDates(true)) {
+        trigger?.focus();
         return;
       }
       const status = inquiryForm.querySelector<HTMLElement>('[data-inquiry-status]');
@@ -618,6 +787,7 @@ const huntSchema = [{
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success) throw new Error(result.message || result.error || 'Unable to send inquiry');
         inquiryForm.reset();
+        inquiryForm.dispatchEvent(new Event('inquiry-date-range-reset'));
         validateDates();
         if (status) status.textContent = result.booking_reference
           ? `Your inquiry was sent. Reference ${result.booking_reference}.`
@@ -1213,6 +1383,290 @@ const huntSchema = [{
     gap: 9px;
   }
 
+  .date-range-field {
+    display: grid;
+    gap: 5px;
+  }
+
+  .date-range-label {
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .date-range-trigger {
+    width: 100%;
+    min-height: 62px;
+    padding: 9px 11px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #fafbf8;
+    color: var(--foreground);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .date-range-trigger:hover {
+    border-color: #aa8a5e;
+  }
+
+  .date-range-trigger:focus-visible {
+    outline: 3px solid rgba(156, 98, 26, .3);
+    outline-offset: 2px;
+    border-color: var(--accent-strong);
+  }
+
+  .date-range-trigger[aria-invalid='true'] {
+    border-color: #824838;
+  }
+
+  .date-range-trigger span {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .date-range-trigger small,
+  .date-range-selection small {
+    color: var(--muted);
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .date-range-trigger b {
+    overflow: hidden;
+    font-size: .78rem;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .date-range-trigger i,
+  .date-range-selection i {
+    color: var(--muted);
+    font-style: normal;
+  }
+
+  .date-range-dialog {
+    width: min(760px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    padding: 0;
+    overflow: auto;
+    border: 0;
+    border-radius: 18px;
+    background: #fff;
+    color: var(--foreground);
+    box-shadow: 0 28px 90px rgba(7, 14, 9, .3);
+  }
+
+  .date-range-dialog::backdrop {
+    background: rgba(7, 14, 9, .62);
+    backdrop-filter: blur(3px);
+  }
+
+  .date-range-dialog-inner {
+    padding: 24px;
+  }
+
+  .date-range-dialog header,
+  .date-range-dialog footer,
+  .date-range-navigation,
+  .date-range-selection {
+    display: flex;
+    align-items: center;
+  }
+
+  .date-range-dialog header {
+    justify-content: space-between;
+    gap: 20px;
+  }
+
+  .date-range-dialog header p {
+    margin: 0 0 3px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 1.45rem;
+    line-height: 1.1;
+  }
+
+  .date-range-dialog header span {
+    color: var(--muted);
+    font-size: .82rem;
+  }
+
+  .date-range-dialog header button,
+  .date-range-navigation button {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: #fff;
+    color: var(--foreground);
+    cursor: pointer;
+    font-size: 1.5rem;
+  }
+
+  .date-range-dialog button:focus-visible {
+    outline: 3px solid rgba(156, 98, 26, .32);
+    outline-offset: 2px;
+  }
+
+  .date-range-selection {
+    margin: 20px 0 14px;
+    padding: 12px 16px;
+    justify-content: center;
+    gap: 22px;
+    border-radius: 11px;
+    background: #f4f1e9;
+  }
+
+  .date-range-selection span {
+    min-width: 150px;
+    display: grid;
+    gap: 2px;
+  }
+
+  .date-range-selection strong {
+    font-size: .9rem;
+    font-weight: 600;
+  }
+
+  .date-range-navigation {
+    position: relative;
+    z-index: 2;
+    margin-bottom: -44px;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .date-range-navigation button {
+    pointer-events: auto;
+  }
+
+  .date-range-navigation button:disabled {
+    opacity: .3;
+    cursor: default;
+  }
+
+  .date-range-calendars {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 34px;
+  }
+
+  .date-range-calendars :global(.date-calendar h3) {
+    min-height: 44px;
+    margin: 0;
+    display: grid;
+    place-items: center;
+    font-family: inherit;
+    font-size: .92rem;
+    font-weight: 700;
+  }
+
+  .date-range-calendars :global(.date-weekdays),
+  .date-range-calendars :global(.date-days) {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .date-range-calendars :global(.date-weekdays span) {
+    min-height: 34px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: .68rem;
+    font-weight: 700;
+  }
+
+  .date-range-calendars :global(.date-days button),
+  .date-range-calendars :global(.date-days > span) {
+    min-width: 0;
+    min-height: 42px;
+  }
+
+  .date-range-calendars :global(.date-days button) {
+    position: relative;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+    font: inherit;
+    font-size: .82rem;
+  }
+
+  .date-range-calendars :global(.date-days button:hover:not(:disabled)) {
+    border-radius: 50%;
+    background: #ece8dc;
+  }
+
+  .date-range-calendars :global(.date-days button:disabled) {
+    color: #a8ada8;
+    cursor: not-allowed;
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+
+  .date-range-calendars :global(.date-days button.in-range) {
+    background: #e9e1d1;
+  }
+
+  .date-range-calendars :global(.date-days button.range-start),
+  .date-range-calendars :global(.date-days button.range-end) {
+    border-radius: 50%;
+    background: var(--dark);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .date-dialog-error {
+    margin: 12px 0 0;
+    color: #824838;
+    font-size: .8rem;
+    line-height: 1.4;
+  }
+
+  .date-range-dialog footer {
+    margin-top: 20px;
+    padding-top: 18px;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .date-range-dialog footer button {
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 9px;
+    cursor: pointer;
+    font: inherit;
+    font-size: .84rem;
+    font-weight: 700;
+  }
+
+  .date-range-dialog footer .date-clear {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  .date-range-dialog footer .primary {
+    min-width: 170px;
+    border: 0;
+  }
+
+  .date-range-dialog footer .primary:disabled {
+    cursor: default;
+    opacity: .4;
+  }
+
   .website-field {
     position: absolute;
     left: -10000px;
@@ -1242,6 +1696,38 @@ const huntSchema = [{
     color: #824838;
     font-size: .76rem;
     line-height: 1.45;
+  }
+
+  @media (max-width: 719px) {
+    .date-range-dialog {
+      width: 100%;
+      max-width: none;
+      max-height: min(92dvh, 720px);
+      margin: auto 0 0;
+      border-radius: 20px 20px 0 0;
+    }
+
+    .date-range-dialog-inner {
+      padding: 20px 18px max(20px, env(safe-area-inset-bottom));
+    }
+
+    .date-range-selection {
+      gap: 12px;
+    }
+
+    .date-range-selection span {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .date-range-calendars {
+      display: block;
+    }
+
+    .date-range-calendars :global(.date-days button),
+    .date-range-calendars :global(.date-days > span) {
+      min-height: 44px;
+    }
   }
 
   .price-label {
