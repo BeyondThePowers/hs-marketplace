@@ -503,7 +503,7 @@ const huntSchema = [{
                     </div>
                     <div class="date-range-navigation">
                       <button type="button" data-month-previous aria-label="Previous month">‹</button>
-                      <span class="sr-only" data-calendar-announcement aria-live="polite"></span>
+                      <span class="calendar-announcement" data-calendar-announcement aria-live="polite"></span>
                       <button type="button" data-month-next aria-label="Next month">›</button>
                     </div>
                     <div class="date-range-calendars" data-date-calendars></div>
@@ -669,6 +669,7 @@ const huntSchema = [{
             button.tabIndex = date === draftStart || (!draftStart && date === minimum) ? 0 : -1;
             if (date === draftStart) button.classList.add('range-start');
             if (date === draftEnd) button.classList.add('range-end');
+            if (date === draftStart && draftEnd) button.classList.add('range-connected');
             if (draftStart && draftEnd && date > draftStart && date < draftEnd) button.classList.add('in-range');
             if (date === draftStart || date === draftEnd) button.setAttribute('aria-selected', 'true');
             button.addEventListener('click', () => {
@@ -1519,23 +1520,29 @@ const huntSchema = [{
   }
 
   .date-range-selection {
-    margin: 20px 0 14px;
-    padding: 12px 16px;
-    justify-content: center;
-    gap: 22px;
+    margin: 20px 0 16px;
+    padding: 13px 18px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 16px;
     border-radius: 11px;
     background: #f4f1e9;
   }
 
   .date-range-selection span {
-    min-width: 150px;
+    min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 3px;
   }
 
   .date-range-selection strong {
-    font-size: .9rem;
+    font-size: .92rem;
     font-weight: 600;
+  }
+
+  .date-range-selection i {
+    align-self: end;
+    padding-bottom: 1px;
   }
 
   .date-range-navigation {
@@ -1553,6 +1560,17 @@ const huntSchema = [{
   .date-range-navigation button:disabled {
     opacity: .3;
     cursor: default;
+  }
+
+  .calendar-announcement {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .date-range-calendars {
@@ -1594,6 +1612,7 @@ const huntSchema = [{
 
   .date-range-calendars :global(.date-days button) {
     position: relative;
+    z-index: 0;
     border: 0;
     background: transparent;
     color: var(--foreground);
@@ -1603,25 +1622,59 @@ const huntSchema = [{
   }
 
   .date-range-calendars :global(.date-days button:hover:not(:disabled)) {
+    color: var(--foreground);
+  }
+
+  .date-range-calendars :global(.date-days button::before),
+  .date-range-calendars :global(.date-days button::after) {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .date-range-calendars :global(.date-days button::after) {
+    width: 38px;
+    height: 38px;
+    top: 50%;
+    left: 50%;
     border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .date-range-calendars :global(.date-days button:hover:not(:disabled)::after) {
     background: #ece8dc;
   }
 
   .date-range-calendars :global(.date-days button:disabled) {
-    color: #a8ada8;
+    color: #9ba19c;
     cursor: not-allowed;
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
   }
 
-  .date-range-calendars :global(.date-days button.in-range) {
+  .date-range-calendars :global(.date-days button.in-range::before) {
+    inset: 3px 0;
     background: #e9e1d1;
+  }
+
+  .date-range-calendars :global(.date-days button.range-start.range-connected::before) {
+    inset: 3px 0 3px 50%;
+    background: #e9e1d1;
+  }
+
+  .date-range-calendars :global(.date-days button.range-end::before) {
+    inset: 3px 50% 3px 0;
+    background: #e9e1d1;
+  }
+
+  .date-range-calendars :global(.date-days button.range-start::after),
+  .date-range-calendars :global(.date-days button.range-end::after),
+  .date-range-calendars :global(.date-days button.range-start:hover::after),
+  .date-range-calendars :global(.date-days button.range-end:hover::after) {
+    background: var(--dark);
   }
 
   .date-range-calendars :global(.date-days button.range-start),
   .date-range-calendars :global(.date-days button.range-end) {
-    border-radius: 50%;
-    background: var(--dark);
     color: #fff;
     font-weight: 700;
   }
@@ -1636,7 +1689,7 @@ const huntSchema = [{
   .date-range-dialog footer {
     margin-top: 20px;
     padding-top: 18px;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 12px;
     border-top: 1px solid var(--border);
   }
@@ -1658,7 +1711,8 @@ const huntSchema = [{
   }
 
   .date-range-dialog footer .primary {
-    min-width: 170px;
+    width: auto;
+    min-width: 180px;
     border: 0;
   }
 
@@ -1727,6 +1781,10 @@ const huntSchema = [{
     .date-range-calendars :global(.date-days button),
     .date-range-calendars :global(.date-days > span) {
       min-height: 44px;
+    }
+
+    .date-range-dialog footer .primary {
+      flex: 1;
     }
   }
 
