@@ -525,7 +525,7 @@ const huntSchema = [{
 </BaseLayout>
 
 <script>
-  import { hasStrictDateOrder, inquiryDateConstraints } from '../../lib/inquiry-date-range';
+  import { hasStrictDateOrder, inquiryCalendarBounds, inquiryDateConstraints } from '../../lib/inquiry-date-range';
 
   const inquiryForm = document.querySelector<HTMLFormElement>('[data-inquiry-form]');
   if (inquiryForm) {
@@ -537,9 +537,7 @@ const huntSchema = [{
       : null;
     const localDate = new Date();
     const today = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-    const calendarMaximum = rules?.years.length
-      ? `${Math.max(...rules.years.map((item) => item.year))}-12-31`
-      : null;
+    const calendarBounds = rules ? inquiryCalendarBounds(rules, today) : null;
     const allowedDate = (date: string) => {
       if (!rules) return date >= today;
       const yearRule = rules.years.find((item) => item.year === Number(date.slice(0, 4)));
@@ -563,7 +561,8 @@ const huntSchema = [{
         today,
         start: startInput.value,
         end: endInput.value,
-        calendarMaximum,
+        calendarMinimum: calendarBounds?.minimum,
+        calendarMaximum: calendarBounds?.maximum,
       });
       startInput.min = constraints.startMin;
       endInput.min = constraints.endMin;

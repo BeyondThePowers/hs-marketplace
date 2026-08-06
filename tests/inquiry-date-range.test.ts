@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { hasStrictDateOrder, inquiryDateConstraints, shiftIsoDate } from '../src/lib/inquiry-date-range.ts';
+import { hasStrictDateOrder, inquiryCalendarBounds, inquiryDateConstraints, shiftIsoDate } from '../src/lib/inquiry-date-range.ts';
 
 test('requires the end date to be later than the start date', () => {
   assert.equal(hasStrictDateOrder('2026-08-10', '2026-08-11'), true);
@@ -42,6 +42,38 @@ test('reserves the final published day for an end date', () => {
     startMax: '2026-12-30',
     endMin: '2026-08-06',
     endMax: '2026-12-31',
+  });
+});
+
+test('derives picker boundaries from actual allow-listed dates', () => {
+  const bounds = inquiryCalendarBounds({
+    years: [{ year: 2026, mode: 'allow' }],
+    dates: ['2026-05-28', '2026-08-12', '2026-08-13'],
+  }, '2026-08-05');
+
+  assert.deepEqual(bounds, {
+    minimum: '2026-08-12',
+    maximum: '2026-08-13',
+  });
+  assert.deepEqual(inquiryDateConstraints({
+    today: '2026-08-05',
+    calendarMinimum: bounds?.minimum,
+    calendarMaximum: bounds?.maximum,
+  }), {
+    startMin: '2026-08-12',
+    startMax: '2026-08-12',
+    endMin: '2026-08-13',
+    endMax: '2026-08-13',
+  });
+});
+
+test('derives block-list boundaries from the configured year', () => {
+  assert.deepEqual(inquiryCalendarBounds({
+    years: [{ year: 2026, mode: 'block' }],
+    dates: ['2026-08-05', '2026-12-31'],
+  }, '2026-08-05'), {
+    minimum: '2026-08-06',
+    maximum: '2026-12-30',
   });
 });
 
