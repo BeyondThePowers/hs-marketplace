@@ -477,9 +477,7 @@ const huntSchema = [{
           <p class="price-label">Starting price</p>
           <p class="price">{formatPrice(hunt.starting_price, hunt.currency)}</p>
           {priceOptions[0]?.basis && <p class="price-basis">{priceBasis(priceOptions[0].basis)}</p>}
-          <p>{directInquiry
-            ? `Your inquiry is sent directly to ${hunt.outfitter_name}.`
-            : `${hunt.outfitter_name} handles inquiries on its own website.`}</p>
+          {!directInquiry && <p>{hunt.outfitter_name} handles inquiries on its own website.</p>}
           {directInquiry ? (
             <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id} data-inquiry-rules={inquiryRules ? JSON.stringify(inquiryRules) : undefined}>
               <h2>Ask {hunt.outfitter_name} about this hunt</h2>
