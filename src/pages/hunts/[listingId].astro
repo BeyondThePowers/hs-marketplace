@@ -120,8 +120,12 @@ const sections = (Array.isArray(hunt?.sections) ? hunt.sections : [])
     };
   })
   .filter((section): section is { heading: string; body: unknown } => section !== null);
-const highlights = Array.isArray((hunt.editorial as Record<string, unknown> | null)?.highlights)
-  ? ((hunt.editorial as Record<string, unknown>).highlights as unknown[]).map(String)
+const editorial = hunt.editorial && typeof hunt.editorial === 'object' && !Array.isArray(hunt.editorial)
+  ? hunt.editorial as Record<string, unknown>
+  : null;
+const overviewDescription = typeof editorial?.description === 'string' ? editorial.description : null;
+const highlights = Array.isArray(editorial?.highlights)
+  ? (editorial.highlights as unknown[]).map(String)
   : [];
 const inclusions = Array.isArray(hunt.inclusions) ? hunt.inclusions.map(String) : [];
 const exclusions = Array.isArray(hunt.exclusions) ? hunt.exclusions.map(String) : [];
@@ -199,7 +203,13 @@ const huntSchema = [{
     <>
       <header class="trip-intro">
         <div class="trip-intro-inner detail-wide">
-          <a class="trip-back" href="/#hunts"><span aria-hidden="true">←</span> All hunts</a>
+          <div class="trip-utility">
+            <a class="trip-back" href="/#hunts"><span aria-hidden="true">←</span> All hunts</a>
+            <nav class="trip-breadcrumbs" aria-label="Breadcrumb">
+              <a href="/#hunts">Hunts</a><span aria-hidden="true">/</span>
+              {destinations.slice(0, 1).map((destination) => <a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>)}
+            </nav>
+          </div>
 
           <div class="trip-media" id="photos" aria-label={`${hunt.title} photographs`}>
             {galleryMedia.length > 0 ? (
@@ -230,10 +240,6 @@ const huntSchema = [{
           </div>
 
           <div class="trip-decision">
-            <nav class="trip-breadcrumbs" aria-label="Breadcrumb">
-              <a href="/#hunts">Hunts</a><span aria-hidden="true">/</span>
-              {destinations.slice(0, 1).map((destination) => <a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>)}
-            </nav>
             <p class="trip-location">{destinations.map((destination, index) => <>{index > 0 && ' · '}<a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}, {destination.country.name}</a></>)}</p>
             <h1 class={titleSizeClass}>{hunt.title}</h1>
             <p class="trip-outfitter">Offered by <strong>{hunt.outfitter_name}</strong></p>
@@ -278,7 +284,8 @@ const huntSchema = [{
         <article>
           <section class="overview-card" id="overview">
             <p class="section-label">Package overview</p>
-            <p class="summary">{hunt.summary}</p>
+            <h2 class="summary">{hunt.summary}</h2>
+            {overviewDescription && <p class="overview-description">{overviewDescription}</p>}
 
             {highlights.length > 0 && (
               <ul class="highlights">
@@ -1371,8 +1378,14 @@ const huntSchema = [{
     gap: 18px clamp(36px, 4vw, 68px);
   }
 
-  .trip-back {
+  .trip-utility {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .trip-back {
     width: fit-content;
     display: inline-flex;
     align-items: center;
@@ -1485,10 +1498,12 @@ const huntSchema = [{
   }
 
   .trip-breadcrumbs {
-    margin-bottom: 22px;
+    margin: 0;
+    padding-left: 18px;
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    border-left: 1px solid #cfd4cd;
     color: #526057;
     font-size: .72rem;
   }
@@ -1673,7 +1688,7 @@ const huntSchema = [{
     }
 
     .trip-breadcrumbs {
-      margin-bottom: 24px;
+      margin-bottom: 0;
     }
 
     .trip-summary {
@@ -1704,6 +1719,10 @@ const huntSchema = [{
     .trip-intro .trip-intro-inner {
       width: 100%;
       gap: 0;
+    }
+
+    .trip-utility {
+      min-height: 0;
     }
 
     .trip-back {
@@ -2023,6 +2042,14 @@ const huntSchema = [{
     margin-bottom: 0;
     color: #2c3730;
     font-size: clamp(1.35rem, 2vw, 1.85rem);
+  }
+
+  .overview-description {
+    max-width: 850px;
+    margin: 18px 0 0;
+    color: #526057;
+    font-size: 1rem;
+    line-height: 1.75;
   }
 
   .overview-card .highlights {
