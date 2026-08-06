@@ -73,10 +73,6 @@ const formatPrice = (amount: number | null, currency: string | null) =>
 const duration = (hunt.duration_and_party ?? hunt.duration) as Record<string, unknown> | null;
 const season = (hunt.season_and_availability ?? hunt.season) as Record<string, unknown> | null;
 const inquiryRules = record(season?.inquiryRules);
-const inquiryRuleYears = records(inquiryRules?.years)
-  .map((item) => Number(item.year))
-  .filter(Number.isFinite)
-  .sort((left, right) => left - right);
 const methodsAndGuiding = record(hunt.methods_and_guiding);
 const pricing = record(hunt.pricing);
 const priceOptions = records(pricing?.options);
@@ -489,9 +485,7 @@ const huntSchema = [{
                 <label><span>Preferred start</span><input name="from_date" type="date" data-inquiry-start required /></label>
                 <label><span>Preferred end</span><input name="to_date" type="date" data-inquiry-end required /></label>
               </div>
-              <p class="date-guidance" data-date-guidance>{inquiryRuleYears.length > 0
-                ? `Published inquiry calendar: ${inquiryRuleYears.join(', ')}. Every day in the requested range must be open.`
-                : 'Share your preferred future dates. The outfitter will confirm the final schedule.'}</p>
+              <p class="date-error" data-date-error aria-live="polite" hidden></p>
               <div class="form-row">
                 <label><span>Hunters</span><input name="num_hunters" type="number" min="1" value="1" required /></label>
                 <label><span>Non-hunters</span><input name="num_non_hunters" type="number" min="0" value="0" /></label>
@@ -531,17 +525,21 @@ const huntSchema = [{
 </BaseLayout>
 
 <script>
+  import { hasStrictDateOrder, inquiryDateConstraints } from '../../lib/inquiry-date-range';
+
   const inquiryForm = document.querySelector<HTMLFormElement>('[data-inquiry-form]');
   if (inquiryForm) {
     const startInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-start]');
     const endInput = inquiryForm.querySelector<HTMLInputElement>('[data-inquiry-end]');
-    const guidance = inquiryForm.querySelector<HTMLElement>('[data-date-guidance]');
-    const guidanceText = guidance?.textContent || '';
+    const dateError = inquiryForm.querySelector<HTMLElement>('[data-date-error]');
     const rules = inquiryForm.dataset.inquiryRules
       ? JSON.parse(inquiryForm.dataset.inquiryRules) as { years: Array<{ year: number; mode: 'allow' | 'block' }>; dates: string[] }
       : null;
     const localDate = new Date();
     const today = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    const calendarMaximum = rules?.years.length
+      ? `${Math.max(...rules.years.map((item) => item.year))}-12-31`
+      : null;
     const allowedDate = (date: string) => {
       if (!rules) return date >= today;
       const yearRule = rules.years.find((item) => item.year === Number(date.slice(0, 4)));
@@ -550,7 +548,7 @@ const huntSchema = [{
       return yearRule.mode === 'allow' ? listed : !listed;
     };
     const allowedRange = (start: string, end: string) => {
-      if (!start || !end || start < today || end < start) return false;
+      if (!start || !end || start < today || end <= start) return false;
       const current = new Date(`${start}T00:00:00Z`);
       const final = new Date(`${end}T00:00:00Z`);
       while (current <= final) {
@@ -561,23 +559,37 @@ const huntSchema = [{
     };
     const validateDates = () => {
       if (!startInput || !endInput) return true;
-      startInput.min = today;
-      endInput.min = startInput.value || today;
-      if (rules?.years.length) {
-        const maximumYear = Math.max(...rules.years.map((item) => item.year));
-        startInput.max = `${maximumYear}-12-31`;
-        endInput.max = `${maximumYear}-12-31`;
-      }
+      const constraints = inquiryDateConstraints({
+        today,
+        start: startInput.value,
+        end: endInput.value,
+        calendarMaximum,
+      });
+      startInput.min = constraints.startMin;
+      endInput.min = constraints.endMin;
+      if (constraints.startMax) startInput.max = constraints.startMax;
+      else startInput.removeAttribute('max');
+      if (constraints.endMax) endInput.max = constraints.endMax;
+      else endInput.removeAttribute('max');
+
       const complete = Boolean(startInput.value && endInput.value);
-      const valid = !complete || allowedRange(startInput.value, endInput.value);
-      const message = valid ? '' : 'Choose a future range where every date is open for inquiries.';
+      const ordered = !complete || hasStrictDateOrder(startInput.value, endInput.value);
+      const valid = !complete || (ordered && allowedRange(startInput.value, endInput.value));
+      const message = valid
+        ? ''
+        : !ordered
+          ? 'Preferred end date must be after preferred start date.'
+          : 'Choose a future range where every date is open for inquiries.';
       startInput.setCustomValidity(message);
       endInput.setCustomValidity(message);
-      if (guidance) guidance.textContent = complete && !valid ? message : guidanceText;
+      if (dateError) {
+        dateError.textContent = message;
+        dateError.hidden = !message;
+      }
       return valid;
     };
-    startInput?.addEventListener('change', validateDates);
-    endInput?.addEventListener('change', validateDates);
+    startInput?.addEventListener('input', validateDates);
+    endInput?.addEventListener('input', validateDates);
     validateDates();
 
     inquiryForm.addEventListener('submit', async (event) => {
@@ -607,6 +619,7 @@ const huntSchema = [{
         const result = await response.json().catch(() => ({}));
         if (!response.ok || !result.success) throw new Error(result.message || result.error || 'Unable to send inquiry');
         inquiryForm.reset();
+        validateDates();
         if (status) status.textContent = result.booking_reference
           ? `Your inquiry was sent. Reference ${result.booking_reference}.`
           : 'Your inquiry was sent.';
@@ -1225,10 +1238,10 @@ const huntSchema = [{
     line-height: 1.45;
   }
 
-  .date-guidance {
+  .date-error {
     margin: -4px 0 2px;
-    color: var(--muted);
-    font-size: .72rem;
+    color: #824838;
+    font-size: .76rem;
     line-height: 1.45;
   }
 
