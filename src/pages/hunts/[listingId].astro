@@ -393,7 +393,9 @@ const huntSchema = [{
                   <div><h3>{String(option.label)}</h3><p>{priceBasis(option.basis)}</p></div>
                   <strong>{formatPrice(Number(option.amount), String(option.currency ?? hunt.currency))}</strong>
                   {(option.includedHunters || option.includedGuests || option.includedHuntingDays) && <p class="option-details">{[
-                    option.includedHunters && `${option.includedHunters} hunters`, option.includedGuests && `${option.includedGuests} guests`, option.includedHuntingDays && `${option.includedHuntingDays} hunting days`,
+                    option.includedHunters && countLabel(option.includedHunters, 'hunter'),
+                    option.includedGuests && countLabel(option.includedGuests, 'guest'),
+                    option.includedHuntingDays && countLabel(option.includedHuntingDays, 'hunting day'),
                   ].filter(Boolean).join(', ')}</p>}
                   {option.notes && <p class="option-details">{String(option.notes)}</p>}
                 </article>
@@ -404,8 +406,8 @@ const huntSchema = [{
                 {strings(pricing?.paymentMethods).length > 0 && <div><dt>Payment methods</dt><dd>{strings(pricing?.paymentMethods).join(', ')}</dd></div>}
               </dl>}</div>}
               {(inclusions.length > 0 || exclusions.length > 0) && <div class="content-subsection package-grid">
-                {inclusions.length > 0 && <div><h3>Included</h3><ul>{inclusions.map((item) => <li>{item}</li>)}</ul></div>}
-                {exclusions.length > 0 && <div><h3>Not included</h3><ul>{exclusions.map((item) => <li>{item}</li>)}</ul></div>}
+                {inclusions.length > 0 && <div><h3>Included</h3><ul class="package-list included-list">{inclusions.map((item) => <li>{item}</li>)}</ul></div>}
+                {exclusions.length > 0 && <div><h3>Not included</h3><ul class="package-list excluded-list">{exclusions.map((item) => <li>{item}</li>)}</ul></div>}
               </div>}
               {optionalServices.length > 0 && <div class="content-subsection"><h3>Optional services</h3><div class="service-list">
                 {optionalServices.map((service) => (
@@ -941,7 +943,15 @@ const huntSchema = [{
   }
 
   .payment-details {
-    margin-top: 22px;
+    margin: 24px 0 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px 28px;
+    border-top: 0;
+  }
+
+  .payment-details div {
+    padding: 0;
+    border-bottom: 0;
   }
 
   .travel-grid {
@@ -1017,6 +1027,46 @@ const huntSchema = [{
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 48px;
+  }
+
+  .package-list {
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 11px;
+    list-style: none;
+  }
+
+  .package-list li {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    color: #465249;
+    line-height: 1.5;
+  }
+
+  .package-list li::before {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: .78rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .included-list li::before {
+    content: '✓';
+    background: #eaf2eb;
+    color: #376044;
+  }
+
+  .excluded-list li::before {
+    content: '×';
+    background: #f6ece8;
+    color: #824838;
   }
 
   .itinerary,
