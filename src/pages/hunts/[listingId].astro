@@ -107,6 +107,9 @@ const durationLabel = duration
   : null;
 const seasonLabel = season ? String(season.display ?? season.label ?? season.summary ?? 'Ask outfitter') : null;
 const tripTypeLabel = hunt.trip_type === 'BigGame' ? 'Big game' : hunt.trip_type;
+const huntFormatLabel = methodsAndGuiding?.arrangement
+  ? `${humanize(methodsAndGuiding.arrangement)} ${String(tripTypeLabel).toLowerCase()}`
+  : tripTypeLabel;
 const structuredSectionTypes = new Set(['overview', 'highlights', 'hunting', 'inclusions', 'exclusions', 'optionalServices', 'itinerary', 'travel', 'equipment', 'terms', 'faq']);
 const sections = (Array.isArray(hunt?.sections) ? hunt.sections : [])
   .map((section) => {
@@ -298,10 +301,9 @@ const huntSchema = [{
               <div><span class="fact-label"><HuntFactIcon name="species" /> Species</span><strong class="inline-links">{(hunt.primary_species ?? []).map((species, index) => <>{index > 0 && ', '}<a href={`/species/${publicSlug(species)}`}>{species}</a></>)}</strong></div>
               {duration && <div><span class="fact-label"><HuntFactIcon name="duration" /> Duration</span><strong>{durationLabel}</strong></div>}
               {season && <div><span class="fact-label"><HuntFactIcon name="season" /> Season</span><strong>{seasonLabel}</strong></div>}
-              <div><span class="fact-label"><HuntFactIcon name="tripType" /> Trip type</span><strong>{tripTypeLabel}</strong></div>
+              <div><span class="fact-label"><HuntFactIcon name="tripType" /> Hunt format</span><strong>{huntFormatLabel}</strong></div>
               {displayedEquipment.length > 0 && <div><span class="fact-label"><HuntFactIcon name="equipment" /> Equipment</span><strong>{displayedEquipment.join(', ')}</strong></div>}
               {displayedTechniques.length > 0 && <div><span class="fact-label"><HuntFactIcon name="style" /> Hunt style</span><strong>{displayedTechniques.join(', ')}</strong></div>}
-              {methodsAndGuiding?.arrangement && <div><span class="fact-label"><HuntFactIcon name="guiding" /> Guiding</span><strong>{humanize(methodsAndGuiding.arrangement)}</strong></div>}
             </div>
           </section>
 
@@ -801,9 +803,16 @@ const huntSchema = [{
   }
 
   .inline-links a {
-    text-decoration: underline;
-    text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: inherit;
+    text-decoration: none;
     text-underline-offset: 3px;
+  }
+
+  .inline-links a:hover,
+  .inline-links a:focus-visible {
+    color: var(--accent-strong);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent);
   }
 
   h1,
@@ -2077,7 +2086,11 @@ const huntSchema = [{
 
   .overview-card .facts strong {
     color: #354239;
-    font-weight: 600;
+    font-weight: 500;
+  }
+
+  .overview-card .facts > div {
+    gap: 8px;
   }
 
   .overview-card .fact-label {
