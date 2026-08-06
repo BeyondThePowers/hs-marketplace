@@ -133,7 +133,14 @@ const inquiry = hunt.outfitter_inquiry && typeof hunt.outfitter_inquiry === 'obj
 const directInquiry = inquiry?.mode === 'source-endpoint' && typeof inquiry.submissionUrl === 'string'
   ? inquiry
   : null;
-const inquiryActionLabel = directInquiry ? 'Request dates' : 'Contact outfitter';
+const inquiryActionLabel = directInquiry ? 'Ask the outfitter' : 'Contact outfitter';
+const titleWordCount = String(hunt.title ?? '').trim().split(/\s+/).filter(Boolean).length;
+const titleLength = String(hunt.title ?? '').length;
+const titleSizeClass = titleLength > 58 || titleWordCount > 9
+  ? 'title-extra-long'
+  : titleLength > 34 || titleWordCount > 6
+    ? 'title-long'
+    : undefined;
 const lodgeRegion = (location: unknown) => {
   if (!location || typeof location !== 'object' || Array.isArray(location)) return null;
   return String((location as Record<string, unknown>).region ?? '') || null;
@@ -228,7 +235,7 @@ const huntSchema = [{
               {destinations.slice(0, 1).map((destination) => <a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}</a>)}
             </nav>
             <p class="trip-location">{destinations.map((destination, index) => <>{index > 0 && ' · '}<a href={`/destinations/${destinationSlug(destination)}`}>{destination.region.name}, {destination.country.name}</a></>)}</p>
-            <h1>{hunt.title}</h1>
+            <h1 class={titleSizeClass}>{hunt.title}</h1>
             <p class="trip-outfitter">Offered by <strong>{hunt.outfitter_name}</strong></p>
             <p class="trip-summary">{hunt.summary}</p>
 
@@ -247,7 +254,7 @@ const huntSchema = [{
               </div>
               <a class="trip-primary-action" href="#inquiry">{inquiryActionLabel}</a>
             </div>
-            <p class="trip-confirmation">Dates and final package terms are confirmed by the outfitter.</p>
+            <p class="trip-confirmation">Your inquiry goes directly to {hunt.outfitter_name}, who will confirm dates, pricing, and final package terms.</p>
             {hunt.source_url && <a class="trip-source-link" href={hunt.source_url}>View the outfitter's original listing <span aria-hidden="true">↗</span></a>}
           </div>
         </div>
@@ -523,10 +530,13 @@ const huntSchema = [{
           <p class="price-label">Starting price</p>
           <p class="price">{formatPrice(hunt.starting_price, hunt.currency)}</p>
           {priceOptions[0]?.basis && <p class="price-basis">{priceBasis(priceOptions[0].basis)}</p>}
-          <p>Confirm dates, availability, and final package terms directly with the outfitter.</p>
+          <p>{directInquiry
+            ? `Your inquiry is sent directly to ${hunt.outfitter_name}.`
+            : `${hunt.outfitter_name} handles inquiries on its own website.`}</p>
           {directInquiry ? (
             <form class="inquiry-form" data-inquiry-form data-endpoint={String(directInquiry.submissionUrl)} data-listing-id={hunt.listing_id} data-inquiry-rules={inquiryRules ? JSON.stringify(inquiryRules) : undefined}>
-              <h2>Ask about this hunt</h2>
+              <h2>Ask {hunt.outfitter_name} about this hunt</h2>
+              <p class="form-routing">Dates, pricing questions, and special requests are delivered to the outfitter.</p>
               <label><span>Name</span><input name="name" autocomplete="name" required /></label>
               <label><span>Email</span><input name="email" type="email" autocomplete="email" required /></label>
               <label><span>Phone</span><input name="phone" type="tel" autocomplete="tel" required /></label>
@@ -547,9 +557,9 @@ const huntSchema = [{
               <p class="form-status" data-inquiry-status aria-live="polite"></p>
             </form>
           ) : (
-            <a class="primary" href={hunt.outfitter_inquiry_url || hunt.source_url || '#'}>Ask about this hunt</a>
+            <a class="primary" href={hunt.outfitter_inquiry_url || hunt.source_url || '#'}>Continue to outfitter site</a>
           )}
-          <a class="secondary" href={hunt.source_url || '#'}>View on outfitter site</a>
+          {directInquiry && <a class="secondary" href={hunt.source_url || '#'}>View on outfitter site</a>}
         </aside>
       </section>
 
@@ -1172,6 +1182,13 @@ const huntSchema = [{
     letter-spacing: 0;
   }
 
+  .inquiry-form .form-routing {
+    margin: -3px 0 8px;
+    color: var(--muted);
+    font-size: .8rem;
+    line-height: 1.5;
+  }
+
   .inquiry-form label {
     display: grid;
     gap: 5px;
@@ -1499,6 +1516,18 @@ const huntSchema = [{
     color: var(--foreground);
     font-size: clamp(2.75rem, 4vw, 4rem);
     line-height: .98;
+    overflow-wrap: break-word;
+    text-wrap: balance;
+  }
+
+  .trip-decision h1.title-long {
+    font-size: clamp(2.35rem, 3.25vw, 3.45rem);
+    line-height: 1;
+  }
+
+  .trip-decision h1.title-extra-long {
+    font-size: clamp(2.05rem, 2.75vw, 3rem);
+    line-height: 1.03;
   }
 
   .trip-outfitter {
@@ -1742,6 +1771,16 @@ const huntSchema = [{
       margin-bottom: 8px;
       font-size: clamp(2.35rem, 11.5vw, 3.35rem);
       line-height: .96;
+    }
+
+    .trip-decision h1.title-long {
+      font-size: clamp(2.15rem, 10vw, 3rem);
+      line-height: .99;
+    }
+
+    .trip-decision h1.title-extra-long {
+      font-size: clamp(1.9rem, 8.8vw, 2.6rem);
+      line-height: 1.02;
     }
 
     .trip-outfitter {
