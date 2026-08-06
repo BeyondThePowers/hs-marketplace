@@ -1473,6 +1473,7 @@ const huntSchema = [{
   }
 
   .date-range-dialog-inner {
+    --date-calendar-gap: 34px;
     padding: 24px;
   }
 
@@ -1520,11 +1521,12 @@ const huntSchema = [{
   }
 
   .date-range-selection {
+    position: relative;
     margin: 20px 0 16px;
     padding: 13px 18px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--date-calendar-gap);
     border-radius: 11px;
     background: #f4f1e9;
   }
@@ -1541,8 +1543,10 @@ const huntSchema = [{
   }
 
   .date-range-selection i {
-    align-self: end;
-    padding-bottom: 1px;
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
   }
 
   .date-range-navigation {
@@ -1576,7 +1580,7 @@ const huntSchema = [{
   .date-range-calendars {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 34px;
+    gap: var(--date-calendar-gap);
   }
 
   .date-range-calendars :global(.date-calendar h3) {
@@ -1762,11 +1766,8 @@ const huntSchema = [{
     }
 
     .date-range-dialog-inner {
+      --date-calendar-gap: 12px;
       padding: 20px 18px max(20px, env(safe-area-inset-bottom));
-    }
-
-    .date-range-selection {
-      gap: 12px;
     }
 
     .date-range-selection span {
