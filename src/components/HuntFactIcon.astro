@@ -1,5 +1,5 @@
 ---
-type FactIconName = 'species' | 'duration' | 'season' | 'guiding';
+type FactIconName = 'species' | 'duration' | 'season' | 'guiding' | 'tripType' | 'equipment' | 'style';
 
 interface Props {
   name: FactIconName;
@@ -46,6 +46,26 @@ const { name } = Astro.props;
       <path d="M3.8 19c.5-3.5 2.3-5.3 5.2-5.3s4.7 1.8 5.2 5.3" />
       <circle cx="17" cy="9" r="2.2" />
       <path d="M15.3 14.3c.6-.3 1.2-.4 1.9-.4 2.2 0 3.5 1.4 3.9 4.1" />
+    </>
+  )}
+  {name === 'tripType' && (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m15.5 8.5-2.1 5-4.9 2 2.1-5 4.9-2Z" />
+    </>
+  )}
+  {name === 'equipment' && (
+    <>
+      <path d="M8 7V6a4 4 0 0 1 8 0v1" />
+      <rect x="5" y="7" width="14" height="13" rx="2" />
+      <path d="M9 11h6M8 15h8M12 15v5" />
+    </>
+  )}
+  {name === 'style' && (
+    <>
+      <circle cx="5" cy="18" r="2" />
+      <circle cx="18.5" cy="6" r="2" />
+      <path d="M7 18c4 0 2.5-5 6-5s2-4.5 3.5-5.5" />
     </>
   )}
 </svg>
