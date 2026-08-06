@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import HuntFactIcon from '../../components/HuntFactIcon.astro';
 import { loadCatalogSnapshot, mediaUrl } from '../../lib/catalog-build';
 import { publicSlug } from '../../lib/public-slugs';
 import { destinationFacetKey, destinationLabel, destinationSlug, huntDestinations } from '../../lib/hunt-destinations';
@@ -246,10 +247,10 @@ const huntSchema = [{
             <p class="trip-summary">{hunt.summary}</p>
 
             <dl class="trip-key-facts">
-              {(hunt.primary_species ?? []).length > 0 && <div><dt>Species</dt><dd>{hunt.primary_species.slice(0, 3).join(', ')}</dd></div>}
-              {durationLabel && <div><dt>Duration</dt><dd>{durationLabel}</dd></div>}
-              {seasonLabel && <div><dt>Season</dt><dd>{seasonLabel}</dd></div>}
-              <div><dt>{methodsAndGuiding?.arrangement ? 'Guiding' : 'Hunt type'}</dt><dd>{methodsAndGuiding?.arrangement ? humanize(methodsAndGuiding.arrangement) : tripTypeLabel}</dd></div>
+              {(hunt.primary_species ?? []).length > 0 && <div><dt><HuntFactIcon name="species" /> <span>Species</span></dt><dd>{hunt.primary_species.slice(0, 3).join(', ')}</dd></div>}
+              {durationLabel && <div><dt><HuntFactIcon name="duration" /> <span>Duration</span></dt><dd>{durationLabel}</dd></div>}
+              {seasonLabel && <div><dt><HuntFactIcon name="season" /> <span>Season</span></dt><dd>{seasonLabel}</dd></div>}
+              <div><dt><HuntFactIcon name="guiding" /> <span>{methodsAndGuiding?.arrangement ? 'Guiding' : 'Hunt type'}</span></dt><dd>{methodsAndGuiding?.arrangement ? humanize(methodsAndGuiding.arrangement) : tripTypeLabel}</dd></div>
             </dl>
 
             <div class="trip-action" data-inline-trip-action>
@@ -1589,6 +1590,16 @@ const huntSchema = [{
     font-weight: 780;
     letter-spacing: .085em;
     text-transform: uppercase;
+  }
+
+  .trip-key-facts dt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .trip-key-facts dt :global(.hunt-fact-icon) {
+    color: var(--accent-strong);
   }
 
   .trip-key-facts dd {
